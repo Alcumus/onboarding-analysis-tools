@@ -21,8 +21,10 @@ CBX_MODULES = 15
 CBX_ACCOUNT_TYPE = 16
 CBX_SUB_PRICE = 17
 CBX_EMPL_PRICE = 18
-CBX_HIRING_CLIENTS = 19
-CBX_PARENTS = 20
+CBX_HIRING_CLIENT_NAMES = 19
+CBX_HIRING_CLIENT_IDS = 20
+CBX_HIRING_CLIENT_QSTATUS = 21
+CBX_PARENTS = 22
 
 HC_COMPANY = 0
 HC_FIRSTNAME = 1
@@ -36,14 +38,25 @@ HC_STATE = 8
 HC_COUNTRY = 9
 HC_ZIP = 10
 HC_CATEGORY = 11
-HC_QUESTIONNAIRE = 12
-HC_CONTRACTOR_ACCOUNT_TYPE = 13
-HC_HIRING_CLIENT_ID = 14
-HC_IS_ASSOCIATION_FEE = 15
-HC_BASE_SUBSCRIPTION_FEE = 16
-HC_IS_TAKE_OVER = 17
-HC_DO_NOT_MATCH = 18
-HC_FORCE_CBX_ID = 19
+HC_IS_TAKE_OVER = 12
+HC_TAKEOVER_RENEWAL_DATE = 13
+HC_TAKEOVER_QF_STATUS = 14
+HC_PROJECT_NAME = 15
+HC_QUESTIONNAIRE_NAME = 16
+HC_QUESTIONNAIRE_ID = 17
+HC_CONTRACTOR_ACCOUNT_TYPE = 18
+HC_HIRING_CLIENT_NAME = 19
+HC_HIRING_CLIENT_ID = 20
+HC_IS_ASSOCIATION_FEE = 21
+HC_BASE_SUBSCRIPTION_FEE = 22
+HC_DO_NOT_MATCH = 23
+HC_FORCE_CBX_ID = 24
+HC_AMBIGUOUS = 25
+
+
+#todo fix the subcription price
+#todo classify business units
+
 
 
 BASE_GENERIC_DOMAIN = ['yahoo.ca', 'yahoo.com', 'hotmail.com', 'gmail.com', 'outlook.com',
@@ -69,7 +82,7 @@ parser.add_argument('hc_list',
 parser.add_argument('output',
                     help='''csv file with the following columns: 
     <<hc_list columns>>, Cognibox ID, contractor, company name score, contact score, address score,
-    overall score,  is CBX, is active member, is take over, is subscription upgrade, is association fee 
+    is CBX, is active member, is take over, is subscription upgrade, is association fee 
     matching information  
 Matching information format:
     Cognibox ID, firstname lastname, birthdate --> Contractor 1 [parents: C1 parent1;C1 parent2;etc..] 
@@ -80,16 +93,16 @@ Please note the Cognibox ID and birthdate is set ONLY if a single match his foun
 or multiple matches are found it is left empty.''')
 
 parser.add_argument('--cbx_list_encoding', dest='cbx_encoding', action='store',
-                    default='utf-8',
-                    help='Encoding for the cbx list (default: utf-8)')
+                    default='utf-8-sig',
+                    help='Encoding for the cbx list (default: utf-8-sig)')
 
 parser.add_argument('--hc_list_encoding', dest='hc_encoding', action='store',
-                    default='cp1252',
-                    help='Encoding for the hc list (default: cp1252)')
+                    default='utf-8-sig',
+                    help='Encoding for the hc list (default: utf-8-sig)')
 
 parser.add_argument('--output_encoding', dest='output_encoding', action='store',
-                    default='cp1252',
-                    help='Encoding for the hc list (default: cp1252)')
+                    default='utf-8-sig',
+                    help='Encoding for the hc list (default: utf-8-sig)')
 
 
 parser.add_argument('--min_company_match_ratio', dest='ratio_company', action='store',
@@ -105,12 +118,58 @@ parser.add_argument('--additional_generic_domain', dest='additional_generic_doma
                     help='list of domains to ignore separated by the list separator (default separator is ;)')
 
 parser.add_argument('--min_address_match_ratio', dest='ratio_address', action='store',
-                    default=90,
+                    default=80,
                     help='Minimum match ratio for contractors, between 0 and 100 (default 70)')
 
 args = parser.parse_args()
 
 GENERIC_DOMAIN = BASE_GENERIC_DOMAIN + args.additional_generic_domain.split(args.list_separator)
+
+
+def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, contact_match=None):
+    cbx_company = cbx_row[CBX_COMPANY_FR] if cbx_row[CBX_COMPANY_FR] else cbx_row[CBX_COMPANY_EN]
+    print('   --> ', cbx_company, hc_email, cbx_row[CBX_ID], ratio_company, ratio_address, contact_match)
+    hiring_clients_list = cbx_row[CBX_HIRING_CLIENT_NAMES].split(args.list_separator)
+    hiring_clients_qstatus = cbx_row[CBX_HIRING_CLIENT_QSTATUS].split(args.list_separator)
+    hc_count = len(hiring_clients_list) if cbx_row[CBX_HIRING_CLIENT_NAMES] else 0
+    is_in_relationship = True if (
+                hc_row[HC_HIRING_CLIENT_NAME] in hiring_clients_list and hc_row[HC_HIRING_CLIENT_NAME]) else False
+    hc_index = 0
+    is_qualified = False
+    while hc_index < len(hiring_clients_list):
+        if hiring_clients_list[hc_index] == hc_row[HC_HIRING_CLIENT_NAME] and \
+                hiring_clients_qstatus[hc_index] == 'validated':
+            is_qualified = True
+            break
+        hc_index += 1
+    return {'cbx_id': cbx_row[CBX_ID],
+            'company': cbx_company,
+            'address': cbx_row[CBX_ADDRESS],
+            'city': cbx_row[CBX_CITY],
+            'state': cbx_row[CBX_STATE],
+            'zip': cbx_row[CBX_ZIP],
+            'country': cbx_row[CBX_COUNTRY],
+            'expiration_date': cbx_row[CBX_EXPIRATION_DATE],
+            'registration_status': cbx_row[CBX_REGISTRATION_STATUS],
+            'suspended': cbx_row[CBX_SUSPENDED],
+            'email': cbx_row[CBX_EMAIL],
+            'first_name': cbx_row[CBX_FISTNAME],
+            'last_name': cbx_row[CBX_LASTNAME],
+            'modules': cbx_row[CBX_MODULES],
+            'account_type': cbx_row[CBX_ACCOUNT_TYPE],
+            'subscription_price': cbx_row[CBX_SUB_PRICE],
+            'employee_price': cbx_row[CBX_EMPL_PRICE],
+            'is_subscription_upgrade': str(False),
+            'parents': cbx_row[CBX_PARENTS],
+            'previous': cbx_row[CBX_COMPANY_OLD],
+            'hiring_client_names': cbx_row[CBX_HIRING_CLIENT_NAMES],
+            'hiring_client_count': hc_count,
+            'is_in_relationship': is_in_relationship,
+            'is_qualified': str(is_qualified),
+            'ratio_company': ratio_company,
+            'ratio_address': ratio_address,
+            'contact_match': str(contact_match),
+            }
 
 if __name__ == '__main__':
     data_path = './data/'
@@ -134,28 +193,39 @@ if __name__ == '__main__':
         for row in csv.reader(cbx):
             cbx_data.append(row)
     headers = cbx_data.pop(0)
-    print(f'Completed reading {len(cbx_data)} employees.')
+    print(f'Completed reading {len(cbx_data)} contractors.')
     print('Reading hiring client data file...')
     with open(hc_file, 'r', encoding=args.hc_encoding) as hc:
         for row in csv.reader(hc):
             hc_data.append(row)
-    print(f'Completed reading {len(hc_data)} employees.')
+    print(f'Completed reading {len(hc_data)} contractors.')
+    total = len(hc_data) - 1
+    index = 1
     with open(output_file, 'w', newline='', encoding=args.output_encoding) as resultfile:
         writer = csv.writer(resultfile)
         headers = hc_data.pop(0)
+        metadata_indexes = []
+        h_index = 0
+        while(h_index < len(headers)):
+            if headers[h_index].lower().startswith('metadata'):
+                metadata_indexes.append(h_index)
+            h_index += 1
+        metadata_indexes.sort(reverse=True)
         #todo check headers names
         headers.extend(['cbx_id', 'cbx_contractor', 'cbx_street', 'cbx_city', 'cbx_state', 'cbx_zip', 'cbx_country',
                         'expiration_date', 'registration_status', 'suspended', 'cbx_email',
                         'cbx_first_name', 'cbx_last_name', 'modules', 'cbx_account_type',
-                        'cbx_subscription_fee', 'cbx_employee_price', 'parents', 'previous',
-                        'hiring_clients', 'hiring_client_count', 'ratio_company', 'ratio_address', 'overall_score',
+                        'cbx_subscription_fee', 'cbx_employee_price',  'is_subscription_upgrade', 'parents', 'previous',
+                        'hiring_client_names', 'hiring_client_count',
+                        'is_in_relationship', 'is_qualified', 'ratio_company', 'ratio_address',
                         'contact_match', 'generic_domain', 'match_count', 'match_count_with_hc',
-                        'multiple_company_match', 'analysis', 'index'])
+                        'analysis', 'index'])
+        metadata_array = []
+        for md_index in metadata_indexes:
+            metadata_array.insert(0, headers.pop(md_index))
+        headers.extend(metadata_array)
         writer.writerow(headers)
-
         # match
-        total = len(hc_data)
-        index = 1
         for hc_row in hc_data:
             matches = []
             hc_company = hc_row[HC_COMPANY]
@@ -170,34 +240,7 @@ if __name__ == '__main__':
                 if hc_force_cbx:
                     cbx_row = next(filter(lambda x: x[CBX_ID].strip() == hc_force_cbx, cbx_data), None)
                     if cbx_row:
-                        hc_count = len(cbx_row[CBX_HIRING_CLIENTS].split(args.list_separator)) if cbx_row[CBX_HIRING_CLIENTS] else 0
-                        cbx_company = cbx_row[CBX_COMPANY_FR] if cbx_row[CBX_COMPANY_FR] else cbx_row[CBX_COMPANY_EN]
-                        matches.append({'cbx_id': cbx_row[CBX_ID],
-                                    'company': cbx_company,
-                                    'address': cbx_row[CBX_ADDRESS],
-                                    'city': cbx_row[CBX_CITY],
-                                    'state': cbx_row[CBX_STATE],
-                                    'zip': cbx_row[CBX_ZIP],
-                                    'country': cbx_row[CBX_COUNTRY],
-                                    'expiration_date': cbx_row[CBX_EXPIRATION_DATE],
-                                    'registration_status': cbx_row[CBX_REGISTRATION_STATUS],
-                                    'suspended': cbx_row[CBX_SUSPENDED],
-                                    'email': cbx_row[CBX_EMAIL],
-                                    'first_name': cbx_row[CBX_FISTNAME],
-                                    'last_name': cbx_row[CBX_LASTNAME],
-                                    'modules': cbx_row[CBX_MODULES],
-                                    'account_type': cbx_row[CBX_ACCOUNT_TYPE],
-                                    'subscription_price': cbx_row[CBX_SUB_PRICE],
-                                    'employee_price': cbx_row[CBX_EMPL_PRICE],
-                                    'parents': cbx_row[CBX_PARENTS],
-                                    'previous': cbx_row[CBX_COMPANY_OLD],
-                                    'hiring_clients': cbx_row[CBX_HIRING_CLIENTS],
-                                    'hiring_client_count': hc_count,
-                                    'ratio_company': '',
-                                    'ratio_address': '',
-                                    'overall_score': '',
-                                    'contact_match': '',
-                                    })
+                        matches.append(add_analysis_data(hc_row,cbx_row))
                 else:
                     for cbx_row in cbx_data:
                         cbx_email = cbx_row[CBX_EMAIL].lower()
@@ -208,24 +251,19 @@ if __name__ == '__main__':
                         else:
                             contact_match = True if cbx_domain == hc_domain else False
                         cbx_zip = cbx_row[CBX_ZIP].replace(' ', '').upper()
-                        cbx_company_en = cbx_row[CBX_COMPANY_EN]
-                        cbx_company_en = re.sub(r"\([^()]*\)", "", cbx_company_en)
-                        cbx_company_fr = cbx_row[CBX_COMPANY_FR]
-                        cbx_company_fr = re.sub(r"\([^()]*\)", "", cbx_company_fr)
+                        cbx_company_en = re.sub(r"\([^()]*\)", "", cbx_row[CBX_COMPANY_EN])
+                        cbx_company_fr = re.sub(r"\([^()]*\)", "", cbx_row[CBX_COMPANY_FR])
                         cbx_parents = cbx_row[CBX_PARENTS]
                         cbx_previous = cbx_row[CBX_COMPANY_OLD]
                         cbx_address = cbx_row[CBX_ADDRESS].lower().replace('.', '').strip()
-
                         ratio_zip = fuzz.ratio(cbx_zip, hc_zip)
                         ratio_company_fr = fuzz.token_sort_ratio(cbx_company_fr.lower().replace('.', '').replace(',', '').strip(),
                                                                  clean_hc_company)
                         ratio_company_en = fuzz.token_sort_ratio(cbx_company_en.lower().replace('.', '').replace(',', '').strip(),
                                                                  clean_hc_company)
-
                         ratio_address = fuzz.token_sort_ratio(cbx_address,
                                                               hc_address)
-
-                        ratio_address = ratio_address + ratio_zip / 2
+                        ratio_address = ratio_address if ratio_zip == 0 else ratio_zip if ratio_address == 0 else ratio_address * ratio_zip / 100
                         ratio_company = ratio_company_fr if ratio_company_fr > ratio_company_en else ratio_company_en
                         ratio_previous = 0
                         for item in cbx_previous.split(args.list_separator):
@@ -234,88 +272,35 @@ if __name__ == '__main__':
                             ratio = fuzz.token_sort_ratio(item.lower().replace('.', '').replace(',', '').strip(),
                                                           clean_hc_company)
                             ratio_previous = ratio if ratio > ratio_previous else ratio_previous
-
-                        ratio_previous *= 0.9
                         ratio_company = ratio_previous if ratio_previous > ratio_company else ratio_company
                         if ((ratio_company >= float(args.ratio_company) and ratio_address >= float(args.ratio_address)) or
                                 contact_match):
-
-                            overall_score = ratio_company
-                            if cbx_row[CBX_REGISTRATION_STATUS] in ('Suspended' or 'Non Member') or not cbx_row[CBX_HIRING_CLIENTS]:
-                                overall_score *= 0.8
-                            cbx_company = cbx_company_fr if cbx_company_fr else cbx_company_en
-                            print('   --> ', cbx_company, hc_email, cbx_row[CBX_ID], ratio_company, ratio_address, overall_score, contact_match)
-                            parent_str = f'[parent: {cbx_parents}]' if cbx_parents else None
-                            previous_str = f'[previous: {cbx_previous}]' if cbx_previous else None
-                            display = [cbx_company]
-                            cbx_company = ' '.join(display)
-                            hc_count = len(cbx_row[CBX_HIRING_CLIENTS].split(args.list_separator)) if cbx_row[CBX_HIRING_CLIENTS] else 0
-                            matches.append({'cbx_id': cbx_row[CBX_ID],
-                                            'company': cbx_company,
-                                            'address': cbx_row[CBX_ADDRESS],
-                                            'city': cbx_row[CBX_CITY],
-                                            'state': cbx_row[CBX_STATE],
-                                            'zip': cbx_row[CBX_ZIP],
-                                            'country': cbx_row[CBX_COUNTRY],
-                                            'expiration_date': cbx_row[CBX_EXPIRATION_DATE],
-                                            'registration_status': cbx_row[CBX_REGISTRATION_STATUS],
-                                            'suspended': cbx_row[CBX_SUSPENDED],
-                                            'email': cbx_row[CBX_EMAIL],
-                                            'first_name': cbx_row[CBX_FISTNAME],
-                                            'last_name': cbx_row[CBX_LASTNAME],
-                                            'modules': cbx_row[CBX_MODULES],
-                                            'account_type': cbx_row[CBX_ACCOUNT_TYPE],
-                                            'subscription_price': cbx_row[CBX_SUB_PRICE],
-                                            'employee_price': cbx_row[CBX_EMPL_PRICE],
-                                            'parents': cbx_row[CBX_PARENTS],
-                                            'previous': cbx_row[CBX_COMPANY_OLD],
-                                            'hiring_clients': cbx_row[CBX_HIRING_CLIENTS],
-                                            'hiring_client_count': hc_count,
-                                            'ratio_company': ratio_company,
-                                            'ratio_address': ratio_address,
-                                            'overall_score': overall_score,
-                                            'contact_match': str(contact_match),
-                                            })
+                            matches.append(add_analysis_data(hc_row, cbx_row, ratio_company, ratio_address, contact_match))
             ids = []
             best_match = 0
-            matches = sorted(matches, key=lambda x: (x['hiring_client_count'], x["overall_score"]), reverse=True)
+            matches = sorted(matches, key=lambda x: (x['hiring_client_count'], x["ratio_address"], x["ratio_company"]), reverse=True)
             for item in matches[0:10]:
                 ids.append(f'{item["cbx_id"]}, {item["company"]}, {item["address"]}, {item["zip"]}, {item["email"]}'
-                           f' --> CR{item["ratio_company"]}, AR{item["ratio_address"]}, OS{item["overall_score"]},'
+                           f' --> CR{item["ratio_company"]}, AR{item["ratio_address"]},'
                            f' CM{item["contact_match"]}, HCC{item["hiring_client_count"]}')
             # append matching results to the hc_list
+            match_data = []
             uniques_cbx_id = set(item['cbx_id'] for item in matches)
-            hc_row.append(matches[0]["cbx_id"] if len(uniques_cbx_id) else '')
-            hc_row.append(matches[0]["company"] if len(uniques_cbx_id) else '')
-            hc_row.append(matches[0]["address"] if len(uniques_cbx_id) else '')
-            hc_row.append(matches[0]["city"] if len(uniques_cbx_id) else '')
-            hc_row.append(matches[0]["state"] if len(uniques_cbx_id) else '')
-            hc_row.append(matches[0]["zip"] if len(uniques_cbx_id) else '')
-            hc_row.append(matches[0]["country"] if len(uniques_cbx_id) else '')
-            hc_row.append(matches[0]["expiration_date"] if len(uniques_cbx_id) else '')
-            hc_row.append(matches[0]["registration_status"] if len(uniques_cbx_id) else '')
-            hc_row.append(matches[0]["suspended"] if len(uniques_cbx_id) else '')
-            hc_row.append(matches[0]["email"] if len(uniques_cbx_id) else '')
-            hc_row.append(matches[0]["first_name"] if len(uniques_cbx_id) else '')
-            hc_row.append(matches[0]["last_name"] if len(uniques_cbx_id) else '')
-            hc_row.append(matches[0]["modules"] if len(uniques_cbx_id) else '')
-            hc_row.append(matches[0]["account_type"] if len(uniques_cbx_id) else '')
-            hc_row.append(matches[0]["subscription_price"] if len(uniques_cbx_id) else '')
-            hc_row.append(matches[0]["employee_price"] if len(uniques_cbx_id) else '')
-            hc_row.append(matches[0]["parents"] if len(uniques_cbx_id) else '')
-            hc_row.append(matches[0]["previous"] if len(uniques_cbx_id) else '')
-            hc_row.append(matches[0]["hiring_clients"] if len(uniques_cbx_id) else '')
-            hc_row.append(matches[0]["hiring_client_count"] if len(uniques_cbx_id) else '')
-            hc_row.append(matches[0]["ratio_company"] if len(uniques_cbx_id) else '')
-            hc_row.append(matches[0]["ratio_address"] if len(uniques_cbx_id) else '')
-            hc_row.append(matches[0]["overall_score"] if len(uniques_cbx_id) else '')
-            hc_row.append(matches[0]["contact_match"] if len(uniques_cbx_id) else '')
-            hc_row.append(str(True if hc_domain in GENERIC_DOMAIN else False))
-            hc_row.append(len(uniques_cbx_id) if len(uniques_cbx_id) else '')
-            hc_row.append(str(len([i for i in matches if i['hiring_client_count'] > 0])))
-            hc_row.append('True' if len(uniques_cbx_id) > 1 else 'False')
-            hc_row.append('|'.join(ids))
+            if uniques_cbx_id:
+                for key, value in matches[0].items():
+                    match_data.append(value)
+                hc_row.extend(match_data)
+                hc_row.append(str(True if hc_domain in GENERIC_DOMAIN else False))
+                hc_row.append(len(uniques_cbx_id) if len(uniques_cbx_id) else '')
+                hc_row.append(str(len([i for i in matches if i['hiring_client_count'] > 0])))
+                hc_row.append('|'.join(ids))
+            else:
+                hc_row.extend(['' for x in range(31)])
             hc_row.append(str(index))
+            metadata_array = []
+            for md_index in metadata_indexes:
+                metadata_array.insert(0,hc_row.pop(md_index))
+            hc_row.extend(metadata_array)
             writer.writerow(hc_row)
             print(f'{index} of {total} [{len(uniques_cbx_id)} found]')
             index += 1
