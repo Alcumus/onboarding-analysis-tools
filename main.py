@@ -2,62 +2,44 @@ import argparse
 import csv
 import re
 from fuzzywuzzy import fuzz
-CBX_ID = 0
-CBX_COMPANY_FR = 1
-CBX_COMPANY_EN = 2
-CBX_COMPANY_OLD = 3
-CBX_ADDRESS = 4
-CBX_CITY = 5
-CBX_STATE = 6
-CBX_COUNTRY = 7
-CBX_ZIP = 8
-CBX_FISTNAME = 9
-CBX_LASTNAME = 10
-CBX_EMAIL = 11
-CBX_EXPIRATION_DATE = 12
-CBX_REGISTRATION_STATUS = 13
-CBX_SUSPENDED = 14
-CBX_MODULES = 15
-CBX_ACCOUNT_TYPE = 16
-CBX_SUB_PRICE = 17
-CBX_EMPL_PRICE = 18
-CBX_HIRING_CLIENT_NAMES = 19
-CBX_HIRING_CLIENT_IDS = 20
-CBX_HIRING_CLIENT_QSTATUS = 21
-CBX_PARENTS = 22
 
-HC_COMPANY = 0
-HC_FIRSTNAME = 1
-HC_LASTNAME = 2
-HC_EMAIL = 3
-HC_PHONE_NUMBER = 4
-HC_LANGUAGE = 5
-HC_STREET = 6
-HC_CITY = 7
-HC_STATE = 8
-HC_COUNTRY = 9
-HC_ZIP = 10
-HC_CATEGORY = 11
-HC_IS_TAKE_OVER = 12
-HC_TAKEOVER_RENEWAL_DATE = 13
-HC_TAKEOVER_QF_STATUS = 14
-HC_PROJECT_NAME = 15
-HC_QUESTIONNAIRE_NAME = 16
-HC_QUESTIONNAIRE_ID = 17
-HC_CONTRACTOR_ACCOUNT_TYPE = 18
-HC_HIRING_CLIENT_NAME = 19
-HC_HIRING_CLIENT_ID = 20
-HC_IS_ASSOCIATION_FEE = 21
-HC_BASE_SUBSCRIPTION_FEE = 22
-HC_DO_NOT_MATCH = 23
-HC_FORCE_CBX_ID = 24
-HC_AMBIGUOUS = 25
+CBX_ID, CBX_COMPANY_FR, CBX_COMPANY_EN, CBX_COMPANY_OLD, CBX_ADDRESS, CBX_CITY, CBX_STATE, \
+CBX_COUNTRY, CBX_ZIP, CBX_FISTNAME, CBX_LASTNAME, CBX_EMAIL, CBX_EXPIRATION_DATE, CBX_REGISTRATION_STATUS, \
+CBX_SUSPENDED, CBX_MODULES, CBX_ACCOUNT_TYPE, CBX_SUB_PRICE, CBX_EMPL_PRICE, CBX_HIRING_CLIENT_NAMES, \
+CBX_HIRING_CLIENT_IDS, CBX_HIRING_CLIENT_QSTATUS, CBX_PARENTS = range(23)
+
+HC_COMPANY, HC_FIRSTNAME, HC_LASTNAME, HC_EMAIL, HC_PHONE_NUMBER, HC_LANGUAGE, HC_STREET, HC_CITY, \
+HC_STATE, HC_COUNTRY, HC_ZIP, HC_CATEGORY, HC_IS_TAKE_OVER, HC_TAKEOVER_RENEWAL_DATE, HC_TAKEOVER_QF_STATUS, \
+HC_PROJECT_NAME, HC_QUESTIONNAIRE_NAME, HC_QUESTIONNAIRE_ID, HC_CONTRACTOR_ACCOUNT_TYPE, HC_HIRING_CLIENT_NAME, \
+HC_HIRING_CLIENT_ID, HC_IS_ASSOCIATION_FEE, HC_BASE_SUBSCRIPTION_FEE, HC_DO_NOT_MATCH, HC_FORCE_CBX_ID, \
+HC_AMBIGUOUS = range(26)
 
 
-#todo fix the subcription price
-#todo classify business units
 
+cbx_headers = ['id', 'name_fr', 'name_en', 'old_names', 'address', 'city', 'state', 'country', 'postal_code',
+               'first_name', 'last_name', 'email', 'cbx_expiration_date', 'registration_code', 'suspended',
+               'modules', 'code', 'subscription_price', 'employee_price', 'hiring_client_names',
+               'hiring_client_ids', 'hiring_client_qstatus', 'parents']
 
+hc_headers = ['contractor', 'first name', 'last name', 'email', 'phone_number', 'language', 'street', 'city',
+              'state', 'country', 'zip', 'category', 'is_take_over', 'take_over_renewal_date',
+              'take_over_qualification_status', 'project_name', 'questionnaire_name', 'questionnaire_id',
+              'account_type', 'hiring_client_name', 'hiring_client_id', 'is_association_fee',
+              'base_subscription_fee', 'do_not_match', 'force_cbx_id', 'ambiguous']
+
+analysis_headers = ['cbx_id', 'cbx_contractor', 'cbx_street', 'cbx_city', 'cbx_state', 'cbx_zip', 'cbx_country',
+                    'expiration_date', 'registration_status', 'suspended', 'cbx_email',
+                    'cbx_first_name', 'cbx_last_name', 'modules', 'cbx_account_type',
+                    'cbx_subscription_fee', 'cbx_employee_price', 'is_subscription_upgrade', 'parents', 'previous',
+                    'hiring_client_names', 'hiring_client_count',
+                    'is_in_relationship', 'is_qualified', 'ratio_company', 'ratio_address',
+                    'contact_match', 'generic_domain', 'match_count', 'match_count_with_hc',
+                    'analysis', 'index']
+
+metadata_headers = ['metadata_x', 'metadata_y', 'metadata_z', '...']
+
+# todo fix the subcription price
+# todo classify business units
 
 BASE_GENERIC_DOMAIN = ['yahoo.ca', 'yahoo.com', 'hotmail.com', 'gmail.com', 'outlook.com',
                        'bell.com', 'bell.ca', 'videotron.ca', 'eastlink.ca', 'kos.net', 'bellnet.ca', 'sasktel.net',
@@ -67,30 +49,46 @@ BASE_GENERIC_DOMAIN = ['yahoo.ca', 'yahoo.com', 'hotmail.com', 'gmail.com', 'out
                        'shaw.ca', 'me.com', 'bell.net',
                        '']
 
+
+def chunks(lst, n):
+    """Yield successive n-sized chunks from lst."""
+    for i in range(0, len(lst), n):
+        yield lst[i:i + n]
+
+hc_headers_with_metadata = hc_headers.copy()
+hc_headers_with_metadata.extend(metadata_headers)
+
+cbx_headers_text = '\n'.join([', '.join(x) for x in list(chunks(cbx_headers, 5))])
+hc_headers_text = '\n'.join([', '.join(x) for x in list(chunks(hc_headers_with_metadata, 5))])
+analysis_headers_text = '\n'.join([', '.join(x) for x in list(chunks(analysis_headers, 5))])
+
+
 # define commandline parser
-parser = argparse.ArgumentParser(description='Tool to match contractor list provided by hiring clients to contractors in CBX, '
-                                             'all input/output files must be in the current directory',
-                                 formatter_class=argparse.RawTextHelpFormatter)
+parser = argparse.ArgumentParser(
+    description='Tool to match contractor list provided by hiring clients to business units in CBX, '
+                'all input/output files must be in the current directory',
+    formatter_class=argparse.RawTextHelpFormatter)
 parser.add_argument('cbx_list',
-                    help='''csv DB export file (no header) of contractors with the following columns: 
-    TBD''')
+                    help=f'csv DB export file of business units with the following columns:\n{cbx_headers_text}\n\n')
 
 parser.add_argument('hc_list',
-                    help='''csv file (with header) and the following columns:
-    contractor, firstname, lastname, email, add_email1, add_email2, street, city, state, country, zip code, category, is take over, take over renewal date'''
-                    )
+                    help=f'csv file of the hiring client contractors and the following columns:\n{hc_headers_text}\n\n')
 parser.add_argument('output',
-                    help='''csv file with the following columns: 
-    <<hc_list columns>>, Cognibox ID, contractor, company name score, contact score, address score,
-    is CBX, is active member, is take over, is subscription upgrade, is association fee 
-    matching information  
-Matching information format:
-    Cognibox ID, firstname lastname, birthdate --> Contractor 1 [parents: C1 parent1;C1 parent2;etc..] 
-    [previous: Empl. Previous1;Empl. Previous2], match ratio 1,
-    Contractor 2 [C2 parent1;C2 parent2;etc..], match ratio 2, etc...
-The matching ratio is a value betwween 0 and 100, where 100 is a perfect match.
-Please note the Cognibox ID and birthdate is set ONLY if a single match his found. If no match
-or multiple matches are found it is left empty.''')
+                    help=f'csv file with the hc_list columns and the following analysis columns:'
+                         f'\n{analysis_headers_text}\n\n**Please note that metadata columns from the'
+                         f' hc file are moved after the analysis data')
+
+parser.add_argument('--min_company_match_ratio', dest='ratio_company', action='store',
+                    default=80,
+                    help='Minimum match ratio for contractors, between 0 and 100 (default 80)')
+
+parser.add_argument('--min_address_match_ratio', dest='ratio_address', action='store',
+                    default=80,
+                    help='Minimum match ratio for addresses (street + zip), between 0 and 100 (default 80)')
+
+parser.add_argument('--additional_generic_domain', dest='additional_generic_domain', action='store',
+                    default='',
+                    help='list of domains to ignore separated by the list separator (default separator is ;)')
 
 parser.add_argument('--cbx_list_encoding', dest='cbx_encoding', action='store',
                     default='utf-8-sig',
@@ -104,22 +102,15 @@ parser.add_argument('--output_encoding', dest='output_encoding', action='store',
                     default='utf-8-sig',
                     help='Encoding for the hc list (default: utf-8-sig)')
 
-
-parser.add_argument('--min_company_match_ratio', dest='ratio_company', action='store',
-                    default=80,
-                    help='Minimum match ratio for contractors, between 0 and 100 (default 60)')
-
 parser.add_argument('--list_separator', dest='list_separator', action='store',
                     default=';',
                     help='string separator used for lists (default: ;)')
 
-parser.add_argument('--additional_generic_domain', dest='additional_generic_domain', action='store',
-                    default='',
-                    help='list of domains to ignore separated by the list separator (default separator is ;)')
+parser.add_argument('--no_headers', dest='no_headers', action='store_true',
+                    help='to indicate that input files have no headers')
 
-parser.add_argument('--min_address_match_ratio', dest='ratio_address', action='store',
-                    default=80,
-                    help='Minimum match ratio for contractors, between 0 and 100 (default 70)')
+parser.add_argument('--ignore_warnings', dest='ignore_warnings', action='store_true',
+                    help='to ignore data consistancy checks and run anyway...')
 
 args = parser.parse_args()
 
@@ -133,7 +124,7 @@ def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, c
     hiring_clients_qstatus = cbx_row[CBX_HIRING_CLIENT_QSTATUS].split(args.list_separator)
     hc_count = len(hiring_clients_list) if cbx_row[CBX_HIRING_CLIENT_NAMES] else 0
     is_in_relationship = True if (
-                hc_row[HC_HIRING_CLIENT_NAME] in hiring_clients_list and hc_row[HC_HIRING_CLIENT_NAME]) else False
+            hc_row[HC_HIRING_CLIENT_NAME] in hiring_clients_list and hc_row[HC_HIRING_CLIENT_NAME]) else False
     hc_index = 0
     is_qualified = False
     while hc_index < len(hiring_clients_list):
@@ -171,6 +162,7 @@ def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, c
             'contact_match': str(contact_match),
             }
 
+
 if __name__ == '__main__':
     data_path = './data/'
     cbx_file = data_path + args.cbx_list
@@ -192,39 +184,63 @@ if __name__ == '__main__':
     with open(cbx_file, 'r', encoding=args.cbx_encoding) as cbx:
         for row in csv.reader(cbx):
             cbx_data.append(row)
-    headers = cbx_data.pop(0)
+    # check cbx db ata consistency
+    if cbx_data and len(cbx_data[0]) != len(cbx_headers):
+        print(f'WARNING: got {len(cbx_data[0])} columns when expecting {len(cbx_headers)}')
+        if not args.ignore_warnings:
+            exit(-1)
+    if not args.no_headers:
+        headers = cbx_data.pop(0)
+        headers = [x.lower().strip() for x in headers]
+        for idx, val in enumerate(cbx_headers):
+            if val != headers[idx]:
+                print(f'WARNING: got "{headers[idx]}" while expecting "{val}" in column {idx + 1}')
+                if not args.ignore_warnings:
+                    exit(-1)
     print(f'Completed reading {len(cbx_data)} contractors.')
+
     print('Reading hiring client data file...')
     with open(hc_file, 'r', encoding=args.hc_encoding) as hc:
         for row in csv.reader(hc):
             hc_data.append(row)
-    print(f'Completed reading {len(hc_data)} contractors.')
     total = len(hc_data) - 1
     index = 1
+    metadata_indexes = []
+    # check hc data consistency
+    if hc_data and len(hc_data[0]) < len(hc_headers):
+        print(f'WARNING: got {len(hc_data[0])} columns when at least {len(hc_headers)} is expected')
+        if not args.ignore_warnings:
+            exit(-1)
+    if not args.no_headers:
+        headers = hc_data.pop(0)
+        headers = [x.lower().strip() for x in headers]
+        for idx, val in enumerate(hc_headers):
+            if val != headers[idx]:
+                print(f'WARNING: got "{headers[idx]}" while expecting "{val}" in column {idx + 1}')
+                if not args.ignore_warnings:
+                    exit(-1)
+    else:
+        if hc_data and len(hc_data[0]) != len(hc_headers):
+            print(f'WARNING: got {len(hc_data[0])} columns when {len(hc_headers)} is exactly expected')
+            if not args.ignore_warnings:
+                exit(-1)
+    print(f'Completed reading {len(hc_data)} contractors.')
+
     with open(output_file, 'w', newline='', encoding=args.output_encoding) as resultfile:
         writer = csv.writer(resultfile)
-        headers = hc_data.pop(0)
-        metadata_indexes = []
-        h_index = 0
-        while(h_index < len(headers)):
-            if headers[h_index].lower().startswith('metadata'):
-                metadata_indexes.append(h_index)
-            h_index += 1
-        metadata_indexes.sort(reverse=True)
-        #todo check headers names
-        headers.extend(['cbx_id', 'cbx_contractor', 'cbx_street', 'cbx_city', 'cbx_state', 'cbx_zip', 'cbx_country',
-                        'expiration_date', 'registration_status', 'suspended', 'cbx_email',
-                        'cbx_first_name', 'cbx_last_name', 'modules', 'cbx_account_type',
-                        'cbx_subscription_fee', 'cbx_employee_price',  'is_subscription_upgrade', 'parents', 'previous',
-                        'hiring_client_names', 'hiring_client_count',
-                        'is_in_relationship', 'is_qualified', 'ratio_company', 'ratio_address',
-                        'contact_match', 'generic_domain', 'match_count', 'match_count_with_hc',
-                        'analysis', 'index'])
-        metadata_array = []
-        for md_index in metadata_indexes:
-            metadata_array.insert(0, headers.pop(md_index))
-        headers.extend(metadata_array)
-        writer.writerow(headers)
+        # append analysis headers and move metadata headers at the end
+        if not args.no_headers:
+            for idx, val in enumerate(headers):
+                if val.lower().startswith('metadata'):
+                    metadata_indexes.append(idx)
+            metadata_indexes.sort(reverse=True)
+            headers.extend(analysis_headers)
+            metadata_array = []
+            for md_index in metadata_indexes:
+                metadata_array.insert(0, headers.pop(md_index))
+            headers.extend(metadata_array)
+            writer.writerow(headers)
+
         # match
         for hc_row in hc_data:
             matches = []
@@ -240,7 +256,7 @@ if __name__ == '__main__':
                 if hc_force_cbx:
                     cbx_row = next(filter(lambda x: x[CBX_ID].strip() == hc_force_cbx, cbx_data), None)
                     if cbx_row:
-                        matches.append(add_analysis_data(hc_row,cbx_row))
+                        matches.append(add_analysis_data(hc_row, cbx_row))
                 else:
                     for cbx_row in cbx_data:
                         cbx_email = cbx_row[CBX_EMAIL].lower()
@@ -257,10 +273,12 @@ if __name__ == '__main__':
                         cbx_previous = cbx_row[CBX_COMPANY_OLD]
                         cbx_address = cbx_row[CBX_ADDRESS].lower().replace('.', '').strip()
                         ratio_zip = fuzz.ratio(cbx_zip, hc_zip)
-                        ratio_company_fr = fuzz.token_sort_ratio(cbx_company_fr.lower().replace('.', '').replace(',', '').strip(),
-                                                                 clean_hc_company)
-                        ratio_company_en = fuzz.token_sort_ratio(cbx_company_en.lower().replace('.', '').replace(',', '').strip(),
-                                                                 clean_hc_company)
+                        ratio_company_fr = fuzz.token_sort_ratio(
+                            cbx_company_fr.lower().replace('.', '').replace(',', '').strip(),
+                            clean_hc_company)
+                        ratio_company_en = fuzz.token_sort_ratio(
+                            cbx_company_en.lower().replace('.', '').replace(',', '').strip(),
+                            clean_hc_company)
                         ratio_address = fuzz.token_sort_ratio(cbx_address,
                                                               hc_address)
                         ratio_address = ratio_address if ratio_zip == 0 else ratio_zip if ratio_address == 0 else ratio_address * ratio_zip / 100
@@ -273,12 +291,15 @@ if __name__ == '__main__':
                                                           clean_hc_company)
                             ratio_previous = ratio if ratio > ratio_previous else ratio_previous
                         ratio_company = ratio_previous if ratio_previous > ratio_company else ratio_company
-                        if ((ratio_company >= float(args.ratio_company) and ratio_address >= float(args.ratio_address)) or
+                        if ((ratio_company >= float(args.ratio_company) and ratio_address >= float(
+                                args.ratio_address)) or
                                 contact_match):
-                            matches.append(add_analysis_data(hc_row, cbx_row, ratio_company, ratio_address, contact_match))
+                            matches.append(
+                                add_analysis_data(hc_row, cbx_row, ratio_company, ratio_address, contact_match))
             ids = []
             best_match = 0
-            matches = sorted(matches, key=lambda x: (x['hiring_client_count'], x["ratio_address"], x["ratio_company"]), reverse=True)
+            matches = sorted(matches, key=lambda x: (x['hiring_client_count'], x["ratio_address"], x["ratio_company"]),
+                             reverse=True)
             for item in matches[0:10]:
                 ids.append(f'{item["cbx_id"]}, {item["company"]}, {item["address"]}, {item["zip"]}, {item["email"]}'
                            f' --> CR{item["ratio_company"]}, AR{item["ratio_address"]},'
@@ -299,7 +320,7 @@ if __name__ == '__main__':
             hc_row.append(str(index))
             metadata_array = []
             for md_index in metadata_indexes:
-                metadata_array.insert(0,hc_row.pop(md_index))
+                metadata_array.insert(0, hc_row.pop(md_index))
             hc_row.extend(metadata_array)
             writer.writerow(hc_row)
             print(f'{index} of {total} [{len(uniques_cbx_id)} found]')
