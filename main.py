@@ -3,30 +3,32 @@ import csv
 import re
 from fuzzywuzzy import fuzz
 
+# noinspection SpellCheckingInspection
 CBX_ID, CBX_COMPANY_FR, CBX_COMPANY_EN, CBX_COMPANY_OLD, CBX_ADDRESS, CBX_CITY, CBX_STATE, \
-CBX_COUNTRY, CBX_ZIP, CBX_FISTNAME, CBX_LASTNAME, CBX_EMAIL, CBX_EXPIRATION_DATE, CBX_REGISTRATION_STATUS, \
-CBX_SUSPENDED, CBX_MODULES, CBX_ACCOUNT_TYPE, CBX_SUB_PRICE, CBX_EMPL_PRICE, CBX_HIRING_CLIENT_NAMES, \
-CBX_HIRING_CLIENT_IDS, CBX_HIRING_CLIENT_QSTATUS, CBX_PARENTS = range(23)
+    CBX_COUNTRY, CBX_ZIP, CBX_FISTNAME, CBX_LASTNAME, CBX_EMAIL, CBX_EXPIRATION_DATE, CBX_REGISTRATION_STATUS, \
+    CBX_SUSPENDED, CBX_MODULES, CBX_ACCOUNT_TYPE, CBX_SUB_PRICE, CBX_EMPL_PRICE, CBX_HIRING_CLIENT_NAMES, \
+    CBX_HIRING_CLIENT_IDS, CBX_HIRING_CLIENT_QSTATUS, CBX_PARENTS = range(23)
 
 HC_COMPANY, HC_FIRSTNAME, HC_LASTNAME, HC_EMAIL, HC_PHONE_NUMBER, HC_LANGUAGE, HC_STREET, HC_CITY, \
-HC_STATE, HC_COUNTRY, HC_ZIP, HC_CATEGORY, HC_IS_TAKE_OVER, HC_TAKEOVER_RENEWAL_DATE, HC_TAKEOVER_QF_STATUS, \
-HC_PROJECT_NAME, HC_QUESTIONNAIRE_NAME, HC_QUESTIONNAIRE_ID, HC_CONTRACTOR_ACCOUNT_TYPE, HC_HIRING_CLIENT_NAME, \
-HC_HIRING_CLIENT_ID, HC_IS_ASSOCIATION_FEE, HC_BASE_SUBSCRIPTION_FEE, HC_DO_NOT_MATCH, HC_FORCE_CBX_ID, \
-HC_AMBIGUOUS = range(26)
+    HC_STATE, HC_COUNTRY, HC_ZIP, HC_CATEGORY, HC_IS_TAKE_OVER, HC_TAKEOVER_RENEWAL_DATE, HC_TAKEOVER_QF_STATUS, \
+    HC_PROJECT_NAME, HC_QUESTIONNAIRE_NAME, HC_QUESTIONNAIRE_ID, HC_CONTRACTOR_ACCOUNT_TYPE, HC_HIRING_CLIENT_NAME, \
+    HC_HIRING_CLIENT_ID, HC_IS_ASSOCIATION_FEE, HC_BASE_SUBSCRIPTION_FEE, HC_DO_NOT_MATCH, HC_FORCE_CBX_ID, \
+    HC_AMBIGUOUS = range(26)
 
-
-
+# noinspection SpellCheckingInspection
 cbx_headers = ['id', 'name_fr', 'name_en', 'old_names', 'address', 'city', 'state', 'country', 'postal_code',
                'first_name', 'last_name', 'email', 'cbx_expiration_date', 'registration_code', 'suspended',
                'modules', 'code', 'subscription_price', 'employee_price', 'hiring_client_names',
                'hiring_client_ids', 'hiring_client_qstatus', 'parents']
 
+# noinspection SpellCheckingInspection
 hc_headers = ['contractor', 'first name', 'last name', 'email', 'phone_number', 'language', 'street', 'city',
               'state', 'country', 'zip', 'category', 'is_take_over', 'take_over_renewal_date',
               'take_over_qualification_status', 'project_name', 'questionnaire_name', 'questionnaire_id',
               'account_type', 'hiring_client_name', 'hiring_client_id', 'is_association_fee',
               'base_subscription_fee', 'do_not_match', 'force_cbx_id', 'ambiguous']
 
+# noinspection SpellCheckingInspection
 analysis_headers = ['cbx_id', 'cbx_contractor', 'cbx_street', 'cbx_city', 'cbx_state', 'cbx_zip', 'cbx_country',
                     'expiration_date', 'registration_status', 'suspended', 'cbx_email',
                     'cbx_first_name', 'cbx_last_name', 'modules', 'cbx_account_type',
@@ -38,9 +40,10 @@ analysis_headers = ['cbx_id', 'cbx_contractor', 'cbx_street', 'cbx_city', 'cbx_s
 
 metadata_headers = ['metadata_x', 'metadata_y', 'metadata_z', '...']
 
-# todo fix the subcription price
+# todo fix the subscription price
 # todo classify business units
 
+# noinspection SpellCheckingInspection
 BASE_GENERIC_DOMAIN = ['yahoo.ca', 'yahoo.com', 'hotmail.com', 'gmail.com', 'outlook.com',
                        'bell.com', 'bell.ca', 'videotron.ca', 'eastlink.ca', 'kos.net', 'bellnet.ca', 'sasktel.net',
                        'aol.com', 'tlb.sympatico.ca', 'sogetel.net', 'cgocable.ca',
@@ -55,13 +58,12 @@ def chunks(lst, n):
     for i in range(0, len(lst), n):
         yield lst[i:i + n]
 
+
 hc_headers_with_metadata = hc_headers.copy()
 hc_headers_with_metadata.extend(metadata_headers)
-
 cbx_headers_text = '\n'.join([', '.join(x) for x in list(chunks(cbx_headers, 5))])
 hc_headers_text = '\n'.join([', '.join(x) for x in list(chunks(hc_headers_with_metadata, 5))])
 analysis_headers_text = '\n'.join([', '.join(x) for x in list(chunks(analysis_headers, 5))])
-
 
 # define commandline parser
 parser = argparse.ArgumentParser(
@@ -110,13 +112,13 @@ parser.add_argument('--no_headers', dest='no_headers', action='store_true',
                     help='to indicate that input files have no headers')
 
 parser.add_argument('--ignore_warnings', dest='ignore_warnings', action='store_true',
-                    help='to ignore data consistancy checks and run anyway...')
+                    help='to ignore data consistency checks and run anyway...')
 
 args = parser.parse_args()
-
 GENERIC_DOMAIN = BASE_GENERIC_DOMAIN + args.additional_generic_domain.split(args.list_separator)
 
 
+# noinspection PyShadowingNames
 def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, contact_match=None):
     cbx_company = cbx_row[CBX_COMPANY_FR] if cbx_row[CBX_COMPANY_FR] else cbx_row[CBX_COMPANY_EN]
     print('   --> ', cbx_company, hc_email, cbx_row[CBX_ID], ratio_company, ratio_address, contact_match)
@@ -125,42 +127,34 @@ def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, c
     hc_count = len(hiring_clients_list) if cbx_row[CBX_HIRING_CLIENT_NAMES] else 0
     is_in_relationship = True if (
             hc_row[HC_HIRING_CLIENT_NAME] in hiring_clients_list and hc_row[HC_HIRING_CLIENT_NAME]) else False
-    hc_index = 0
     is_qualified = False
-    while hc_index < len(hiring_clients_list):
-        if hiring_clients_list[hc_index] == hc_row[HC_HIRING_CLIENT_NAME] and \
-                hiring_clients_qstatus[hc_index] == 'validated':
+    for idx, val in enumerate(hiring_clients_list):
+        if val == hc_row[HC_HIRING_CLIENT_NAME] and hiring_clients_qstatus[idx] == 'validated':
             is_qualified = True
             break
-        hc_index += 1
-    return {'cbx_id': cbx_row[CBX_ID],
-            'company': cbx_company,
-            'address': cbx_row[CBX_ADDRESS],
-            'city': cbx_row[CBX_CITY],
-            'state': cbx_row[CBX_STATE],
-            'zip': cbx_row[CBX_ZIP],
-            'country': cbx_row[CBX_COUNTRY],
-            'expiration_date': cbx_row[CBX_EXPIRATION_DATE],
+    return {'cbx_id': cbx_row[CBX_ID], 'company': cbx_company, 'address': cbx_row[CBX_ADDRESS],
+            'city': cbx_row[CBX_CITY], 'state': cbx_row[CBX_STATE], 'zip': cbx_row[CBX_ZIP],
+            'country': cbx_row[CBX_COUNTRY], 'expiration_date': cbx_row[CBX_EXPIRATION_DATE],
             'registration_status': cbx_row[CBX_REGISTRATION_STATUS],
-            'suspended': cbx_row[CBX_SUSPENDED],
-            'email': cbx_row[CBX_EMAIL],
-            'first_name': cbx_row[CBX_FISTNAME],
-            'last_name': cbx_row[CBX_LASTNAME],
-            'modules': cbx_row[CBX_MODULES],
-            'account_type': cbx_row[CBX_ACCOUNT_TYPE],
-            'subscription_price': cbx_row[CBX_SUB_PRICE],
-            'employee_price': cbx_row[CBX_EMPL_PRICE],
-            'is_subscription_upgrade': str(False),
-            'parents': cbx_row[CBX_PARENTS],
-            'previous': cbx_row[CBX_COMPANY_OLD],
-            'hiring_client_names': cbx_row[CBX_HIRING_CLIENT_NAMES],
-            'hiring_client_count': hc_count,
-            'is_in_relationship': is_in_relationship,
-            'is_qualified': str(is_qualified),
-            'ratio_company': ratio_company,
-            'ratio_address': ratio_address,
-            'contact_match': str(contact_match),
+            'suspended': cbx_row[CBX_SUSPENDED], 'email': cbx_row[CBX_EMAIL], 'first_name': cbx_row[CBX_FISTNAME],
+            'last_name': cbx_row[CBX_LASTNAME], 'modules': cbx_row[CBX_MODULES],
+            'account_type': cbx_row[CBX_ACCOUNT_TYPE], 'subscription_price': cbx_row[CBX_SUB_PRICE],
+            'employee_price': cbx_row[CBX_EMPL_PRICE], 'is_subscription_upgrade': str(False),
+            'parents': cbx_row[CBX_PARENTS], 'previous': cbx_row[CBX_COMPANY_OLD],
+            'hiring_client_names': cbx_row[CBX_HIRING_CLIENT_NAMES], 'hiring_client_count': hc_count,
+            'is_in_relationship': is_in_relationship, 'is_qualified': str(is_qualified),
+            'ratio_company': ratio_company, 'ratio_address': ratio_address, 'contact_match': str(contact_match),
             }
+
+
+# noinspection PyShadowingNames
+def check_headers(headers, standards, ignore):
+    headers = [x.lower().strip() for x in headers]
+    for idx, val in enumerate(standards):
+        if val != headers[idx]:
+            print(f'WARNING: got "{headers[idx]}" while expecting "{val}" in column {idx + 1}')
+            if not ignore:
+                exit(-1)
 
 
 if __name__ == '__main__':
@@ -172,7 +166,7 @@ if __name__ == '__main__':
     # output parameters used
     print(f'Reading CBX list: {args.cbx_list} [{args.cbx_encoding}]')
     print(f'Reading HC list: {args.hc_list} [{args.hc_encoding}]')
-    print(f'Outputing results in: {args.output} [{args.output_encoding}]')
+    print(f'Outputting results in: {args.output} [{args.output_encoding}]')
     print(f'contractor match ratio: {args.ratio_company}')
     print(f'address match ratio: {args.ratio_address}')
     print(f'list of "generic domains:\n{BASE_GENERIC_DOMAIN}')
@@ -192,11 +186,7 @@ if __name__ == '__main__':
     if not args.no_headers:
         headers = cbx_data.pop(0)
         headers = [x.lower().strip() for x in headers]
-        for idx, val in enumerate(cbx_headers):
-            if val != headers[idx]:
-                print(f'WARNING: got "{headers[idx]}" while expecting "{val}" in column {idx + 1}')
-                if not args.ignore_warnings:
-                    exit(-1)
+        check_headers(headers, cbx_headers, args.ignore_warnings)
     print(f'Completed reading {len(cbx_data)} contractors.')
 
     print('Reading hiring client data file...')
@@ -204,8 +194,8 @@ if __name__ == '__main__':
         for row in csv.reader(hc):
             hc_data.append(row)
     total = len(hc_data) - 1
-    index = 1
     metadata_indexes = []
+    headers = []
     # check hc data consistency
     if hc_data and len(hc_data[0]) < len(hc_headers):
         print(f'WARNING: got {len(hc_data[0])} columns when at least {len(hc_headers)} is expected')
@@ -214,11 +204,7 @@ if __name__ == '__main__':
     if not args.no_headers:
         headers = hc_data.pop(0)
         headers = [x.lower().strip() for x in headers]
-        for idx, val in enumerate(hc_headers):
-            if val != headers[idx]:
-                print(f'WARNING: got "{headers[idx]}" while expecting "{val}" in column {idx + 1}')
-                if not args.ignore_warnings:
-                    exit(-1)
+        check_headers(headers, hc_headers, args.ignore_warnings)
     else:
         if hc_data and len(hc_data[0]) != len(hc_headers):
             print(f'WARNING: got {len(hc_data[0])} columns when {len(hc_headers)} is exactly expected')
@@ -226,8 +212,8 @@ if __name__ == '__main__':
                 exit(-1)
     print(f'Completed reading {len(hc_data)} contractors.')
 
-    with open(output_file, 'w', newline='', encoding=args.output_encoding) as resultfile:
-        writer = csv.writer(resultfile)
+    with open(output_file, 'w', newline='', encoding=args.output_encoding) as result_file:
+        writer = csv.writer(result_file)
         # append analysis headers and move metadata headers at the end
         if not args.no_headers:
             for idx, val in enumerate(headers):
@@ -242,7 +228,7 @@ if __name__ == '__main__':
             writer.writerow(headers)
 
         # match
-        for hc_row in hc_data:
+        for index, hc_row in enumerate(hc_data):
             matches = []
             hc_company = hc_row[HC_COMPANY]
             clean_hc_company = hc_company.lower().replace('.', '').replace(',', '').strip()
@@ -281,7 +267,8 @@ if __name__ == '__main__':
                             clean_hc_company)
                         ratio_address = fuzz.token_sort_ratio(cbx_address,
                                                               hc_address)
-                        ratio_address = ratio_address if ratio_zip == 0 else ratio_zip if ratio_address == 0 else ratio_address * ratio_zip / 100
+                        ratio_address = ratio_address if ratio_zip == 0 else ratio_zip if ratio_address == 0 \
+                            else ratio_address * ratio_zip / 100
                         ratio_company = ratio_company_fr if ratio_company_fr > ratio_company_en else ratio_company_en
                         ratio_previous = 0
                         for item in cbx_previous.split(args.list_separator):
@@ -317,11 +304,10 @@ if __name__ == '__main__':
                 hc_row.append('|'.join(ids))
             else:
                 hc_row.extend(['' for x in range(31)])
-            hc_row.append(str(index))
+            hc_row.append(str(index+1))
             metadata_array = []
             for md_index in metadata_indexes:
                 metadata_array.insert(0, hc_row.pop(md_index))
             hc_row.extend(metadata_array)
             writer.writerow(hc_row)
-            print(f'{index} of {total} [{len(uniques_cbx_id)} found]')
-            index += 1
+            print(f'{index+1} of {total} [{len(uniques_cbx_id)} found]')
