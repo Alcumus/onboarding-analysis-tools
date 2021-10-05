@@ -36,12 +36,11 @@ analysis_headers = ['cbx_id', 'cbx_contractor', 'cbx_street', 'cbx_city', 'cbx_s
                     'hiring_client_names', 'hiring_client_count',
                     'is_in_relationship', 'is_qualified', 'ratio_company', 'ratio_address',
                     'contact_match', 'generic_domain', 'match_count', 'match_count_with_hc',
-                    'analysis', 'index']
+                    'analysis', 'create_in_cbx', 'index']
 
 metadata_headers = ['metadata_x', 'metadata_y', 'metadata_z', '...']
 
 # todo fix the subscription price
-# todo classify business units
 
 # noinspection SpellCheckingInspection
 BASE_GENERIC_DOMAIN = ['yahoo.ca', 'yahoo.com', 'hotmail.com', 'gmail.com', 'outlook.com',
@@ -211,7 +210,7 @@ if __name__ == '__main__':
             if not args.ignore_warnings:
                 exit(-1)
     print(f'Completed reading {len(hc_data)} contractors.')
-
+    print(f'Starting data analysis...')
     with open(output_file, 'w', newline='', encoding=args.output_encoding) as result_file:
         writer = csv.writer(result_file)
         # append analysis headers and move metadata headers at the end
@@ -303,7 +302,8 @@ if __name__ == '__main__':
                 hc_row.append(str(len([i for i in matches if i['hiring_client_count'] > 0])))
                 hc_row.append('|'.join(ids))
             else:
-                hc_row.extend(['' for x in range(31)])
+                hc_row.extend(['' for x in range(len(analysis_headers)-2)])
+            hc_row.append(str(True if len(uniques_cbx_id) and not hc_row[HC_AMBIGUOUS] else False))
             hc_row.append(str(index+1))
             metadata_array = []
             for md_index in metadata_indexes:
@@ -311,3 +311,4 @@ if __name__ == '__main__':
             hc_row.extend(metadata_array)
             writer.writerow(hc_row)
             print(f'{index+1} of {total} [{len(uniques_cbx_id)} found]')
+    print(f'Completed data analysis...')
