@@ -9,11 +9,13 @@ CBX_ID, CBX_COMPANY_FR, CBX_COMPANY_EN, CBX_COMPANY_OLD, CBX_ADDRESS, CBX_CITY, 
     CBX_SUSPENDED, CBX_MODULES, CBX_ACCOUNT_TYPE, CBX_SUB_PRICE, CBX_EMPL_PRICE, CBX_HIRING_CLIENT_NAMES, \
     CBX_HIRING_CLIENT_IDS, CBX_HIRING_CLIENT_QSTATUS, CBX_PARENTS = range(23)
 
-HC_COMPANY, HC_FIRSTNAME, HC_LASTNAME, HC_EMAIL, HC_PHONE_NUMBER, HC_LANGUAGE, HC_STREET, HC_CITY, \
-    HC_STATE, HC_COUNTRY, HC_ZIP, HC_CATEGORY, HC_IS_TAKE_OVER, HC_TAKEOVER_RENEWAL_DATE, HC_TAKEOVER_QF_STATUS, \
-    HC_PROJECT_NAME, HC_QUESTIONNAIRE_NAME, HC_QUESTIONNAIRE_ID, HC_CONTRACTOR_ACCOUNT_TYPE, HC_HIRING_CLIENT_NAME, \
-    HC_HIRING_CLIENT_ID, HC_IS_ASSOCIATION_FEE, HC_BASE_SUBSCRIPTION_FEE, HC_DO_NOT_MATCH, HC_FORCE_CBX_ID, \
-    HC_AMBIGUOUS = range(26)
+HC_COMPANY, HC_FIRSTNAME, HC_LASTNAME, HC_EMAIL, HC_CONTACT_PHONE, HC_LANGUAGE, HC_STREET, HC_CITY, \
+    HC_STATE, HC_COUNTRY, HC_ZIP, HC_CATEGORY, HC_DESCRIPTION, HC_PHONE, HC_WEBSITE,\
+    HC_IS_TAKE_OVER, HC_TAKEOVER_RENEWAL_DATE, HC_TAKEOVER_QF_STATUS, \
+    HC_PROJECT_NAME, HC_QUESTIONNAIRE_NAME, HC_QUESTIONNAIRE_ID, HC_PRICING_GROUP_ID, HC_PRICING_GROUP_CODE, \
+    HC_HIRING_CLIENT_NAME, HC_HIRING_CLIENT_ID, HC_IS_ASSOCIATION_FEE, HC_BASE_SUBSCRIPTION_FEE, \
+    HC_CURRENCY, HC_AGENT_IN_CHARGE_ID, HC_INFORMATION_SHARED, HC_TIMEZONE, HC_DO_NOT_MATCH, HC_FORCE_CBX_ID, \
+    HC_AMBIGUOUS = range(34)
 
 # noinspection SpellCheckingInspection
 cbx_headers = ['id', 'name_fr', 'name_en', 'old_names', 'address', 'city', 'state', 'country', 'postal_code',
@@ -22,11 +24,14 @@ cbx_headers = ['id', 'name_fr', 'name_en', 'old_names', 'address', 'city', 'stat
                'hiring_client_ids', 'hiring_client_qstatus', 'parents']
 
 # noinspection SpellCheckingInspection
-hc_headers = ['contractor', 'first name', 'last name', 'email', 'phone_number', 'language', 'street', 'city',
-              'state', 'country', 'zip', 'category', 'is_take_over', 'take_over_renewal_date',
-              'take_over_qualification_status', 'project_name', 'questionnaire_name', 'questionnaire_id',
-              'account_type', 'hiring_client_name', 'hiring_client_id', 'is_association_fee',
-              'base_subscription_fee', 'do_not_match', 'force_cbx_id', 'ambiguous']
+hc_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'contact_email', 'contact_phone',
+              'contact_language', 'address', 'city', 'province_state_iso2', 'country_iso2',
+              'postal_code', 'category', 'description', 'phone', 'website',
+              'is_take_over', 'take_over_renewal_date',
+              'take_over_qualification_status', 'batch', 'questionnaire_name', 'questionnaire_id',
+              'pricing_group_id', 'pricing_group_code', 'hiring_client_name', 'hiring_client_id', 'is_association_fee',
+              'base_subscription_fee', 'currency', 'agent_in_charge_id', 'information_shared', 'timezone',
+              'do_not_match', 'force_cbx_id', 'ambiguous']
 
 # noinspection SpellCheckingInspection
 analysis_headers = ['cbx_id', 'cbx_contractor', 'cbx_street', 'cbx_city', 'cbx_state', 'cbx_zip', 'cbx_country',
@@ -303,7 +308,7 @@ if __name__ == '__main__':
                 hc_row.append('|'.join(ids))
             else:
                 hc_row.extend(['' for x in range(len(analysis_headers)-2)])
-            hc_row.append(str(True if len(uniques_cbx_id) and not hc_row[HC_AMBIGUOUS] else False))
+            hc_row.append(str(False if len(uniques_cbx_id) and not hc_row[HC_AMBIGUOUS] else True))
             hc_row.append(str(index+1))
             metadata_array = []
             for md_index in metadata_indexes:
