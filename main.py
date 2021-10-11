@@ -55,6 +55,11 @@ BASE_GENERIC_DOMAIN = ['yahoo.ca', 'yahoo.com', 'hotmail.com', 'gmail.com', 'out
                        'globetrotter.net', 'live.com', 'sympatico.ca', 'live.fr', 'yahoo.fr', 'telus.net',
                        'shaw.ca', 'me.com', 'bell.net',
                        '']
+# noinspection SpellCheckingInspection
+BASE_GENERIC_COMPANY_NAME_WORDS = ['construction', 'contracting', 'industriel', 'industriels', 'service',
+                                   'services', 'inc', 'limited', 'ltd', 'ltee', 'ltée', 'co', 'industrial' 'solutions',
+                                   'llc', 'enterprises', 'systems', 'industries', 'technologies', 'company',
+                                   'corporation', 'installations', 'enr']
 
 
 def chunks(lst, n):
@@ -96,6 +101,11 @@ parser.add_argument('--additional_generic_domain', dest='additional_generic_doma
                     default='',
                     help='list of domains to ignore separated by the list separator (default separator is ;)')
 
+parser.add_argument('--additional_generic_name_word', dest='additional_generic_name_word', action='store',
+                    default='',
+                    help='list of generic words in company name to ignore separated by the list separator'
+                         ' (default separator is ;)')
+
 parser.add_argument('--cbx_list_encoding', dest='cbx_encoding', action='store',
                     default='utf-8-sig',
                     help='Encoding for the cbx list (default: utf-8-sig)')
@@ -120,6 +130,8 @@ parser.add_argument('--ignore_warnings', dest='ignore_warnings', action='store_t
 
 args = parser.parse_args()
 GENERIC_DOMAIN = BASE_GENERIC_DOMAIN + args.additional_generic_domain.split(args.list_separator)
+GENERIC_COMPANY_NAME_WORDS = BASE_GENERIC_COMPANY_NAME_WORDS + \
+                             args.additional_generic_name_word.split(args.list_separator)
 
 
 # noinspection PyShadowingNames
@@ -149,6 +161,12 @@ def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, c
             'is_in_relationship': is_in_relationship, 'is_qualified': str(is_qualified),
             'ratio_company': ratio_company, 'ratio_address': ratio_address, 'contact_match': str(contact_match),
             }
+
+
+def remove_generics(company_name):
+    for word in GENERIC_COMPANY_NAME_WORDS:
+        company_name = company_name.replace(word, '')
+    return company_name
 
 
 # noinspection PyShadowingNames
@@ -237,6 +255,7 @@ if __name__ == '__main__':
             hc_company = hc_row[HC_COMPANY]
             clean_hc_company = hc_company.lower().replace('.', '').replace(',', '').strip()
             clean_hc_company = modified_string = re.sub(r"\([^()]*\)", "", clean_hc_company)
+            clean_hc_company = remove_generics(clean_hc_company)
             hc_email = hc_row[HC_EMAIL].lower()
             hc_domain = hc_email[hc_email.find('@') + 1:]
             hc_zip = hc_row[HC_ZIP].replace(' ', '').upper()
@@ -258,33 +277,41 @@ if __name__ == '__main__':
                             contact_match = True if cbx_domain == hc_domain else False
                         cbx_zip = cbx_row[CBX_ZIP].replace(' ', '').upper()
                         cbx_company_en = re.sub(r"\([^()]*\)", "", cbx_row[CBX_COMPANY_EN])
+                        cbx_company_en = cbx_company_en.lower().replace('.', '').replace(',', '').strip()
+                        cbx_company_en = remove_generics(cbx_company_en)
                         cbx_company_fr = re.sub(r"\([^()]*\)", "", cbx_row[CBX_COMPANY_FR])
+                        cbx_company_fr = cbx_company_fr.lower().replace('.', '').replace(',', '').strip()
+                        cbx_company_fr = remove_generics(cbx_company_fr)
                         cbx_parents = cbx_row[CBX_PARENTS]
                         cbx_previous = cbx_row[CBX_COMPANY_OLD]
                         cbx_address = cbx_row[CBX_ADDRESS].lower().replace('.', '').strip()
-                        ratio_zip = fuzz.ratio(cbx_zip, hc_zip)
-                        ratio_company_fr = fuzz.token_sort_ratio(
-                            cbx_company_fr.lower().replace('.', '').replace(',', '').strip(),
-                            clean_hc_company)
-                        ratio_company_en = fuzz.token_sort_ratio(
-                            cbx_company_en.lower().replace('.', '').replace(',', '').strip(),
-                            clean_hc_company)
-                        ratio_address = fuzz.token_sort_ratio(cbx_address,
-                                                              hc_address)
-                        ratio_address = ratio_address if ratio_zip == 0 else ratio_zip if ratio_address == 0 \
-                            else ratio_address * ratio_zip / 100
+                        ratio_company_fr = fuzz.token_sort_ratio(cbx_company_fr, clean_hc_company)
+                        ratio_company_en = fuzz.token_sort_ratio(cbx_company_en, clean_hc_company)
+                        if cbx_row[CBX_COUNTRY] != hc_row[HC_COUNTRY]:
+                            ratio_zip = ratio_address = 0.0
+                        else:
+                            ratio_zip = fuzz.ratio(cbx_zip, hc_zip)
+                            ratio_address = fuzz.token_sort_ratio(cbx_address, hc_address)
+                            ratio_address = ratio_address if ratio_zip == 0 else ratio_zip if ratio_address == 0 \
+                                else ratio_address * ratio_zip / 100
                         ratio_company = ratio_company_fr if ratio_company_fr > ratio_company_en else ratio_company_en
                         ratio_previous = 0
                         for item in cbx_previous.split(args.list_separator):
                             if item in (cbx_company_en, cbx_company_fr):
                                 continue
+                            item = re.sub(r"\([^()]*\)", "", item)
+                            item = item.lower().replace('.', '').replace(',', '').strip()
+                            item = remove_generics(item)
                             ratio = fuzz.token_sort_ratio(item.lower().replace('.', '').replace(',', '').strip(),
                                                           clean_hc_company)
                             ratio_previous = ratio if ratio > ratio_previous else ratio_previous
                         ratio_company = ratio_previous if ratio_previous > ratio_company else ratio_company
-                        if ((ratio_company >= float(args.ratio_company) and ratio_address >= float(
-                                args.ratio_address)) or
-                                contact_match):
+                        if (contact_match or (ratio_company >= float(args.ratio_company)
+                                              and ratio_address >= float(args.ratio_address))):
+                            matches.append(
+                                add_analysis_data(hc_row, cbx_row, ratio_company, ratio_address, contact_match))
+                        elif ratio_company >= 90.0 or (ratio_company >= float(args.ratio_company)
+                                                       and ratio_address >= float(args.ratio_address)):
                             matches.append(
                                 add_analysis_data(hc_row, cbx_row, ratio_company, ratio_address, contact_match))
             ids = []
