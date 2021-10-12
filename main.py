@@ -54,12 +54,12 @@ BASE_GENERIC_DOMAIN = ['yahoo.ca', 'yahoo.com', 'hotmail.com', 'gmail.com', 'out
                        'hotmail.ca', 'live.ca', 'icloud.com', 'hotmail.fr', 'yahoo.com', 'outlook.fr', 'msn.com',
                        'globetrotter.net', 'live.com', 'sympatico.ca', 'live.fr', 'yahoo.fr', 'telus.net',
                        'shaw.ca', 'me.com', 'bell.net',
-                       '']
+                       '', 'videotron.qc.ca', 'ivic.qc.ca', 'qc.aira.com', 'canada.ca', 'axion.ca']
 # noinspection SpellCheckingInspection
 BASE_GENERIC_COMPANY_NAME_WORDS = ['construction', 'contracting', 'industriel', 'industriels', 'service',
-                                   'services', 'inc', 'limited', 'ltd', 'ltee', 'ltée', 'co', 'industrial' 'solutions',
-                                   'llc', 'enterprises', 'systems', 'industries', 'technologies', 'company',
-                                   'corporation', 'installations', 'enr']
+                                   'services', 'inc', 'limited', 'ltd', 'ltee', 'ltée', 'co', 'industrial',
+                                   'solutions', 'llc', 'enterprises', 'systems', 'industries',
+                                   'technologies', 'company', 'corporation', 'installations', 'enr']
 
 
 def chunks(lst, n):
@@ -165,7 +165,7 @@ def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, c
 
 def remove_generics(company_name):
     for word in GENERIC_COMPANY_NAME_WORDS:
-        company_name = company_name.replace(word, '')
+        company_name = re.sub(r'\b' + word + r'\b', '', company_name)
     return company_name
 
 
@@ -310,7 +310,7 @@ if __name__ == '__main__':
                                               and ratio_address >= float(args.ratio_address))):
                             matches.append(
                                 add_analysis_data(hc_row, cbx_row, ratio_company, ratio_address, contact_match))
-                        elif ratio_company >= 90.0 or (ratio_company >= float(args.ratio_company)
+                        elif ratio_company >= 95.0 or (ratio_company >= float(args.ratio_company)
                                                        and ratio_address >= float(args.ratio_address)):
                             matches.append(
                                 add_analysis_data(hc_row, cbx_row, ratio_company, ratio_address, contact_match))
