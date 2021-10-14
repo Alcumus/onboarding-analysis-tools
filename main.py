@@ -271,10 +271,13 @@ if __name__ == '__main__':
                         cbx_email = cbx_row[CBX_EMAIL].lower()
                         cbx_domain = cbx_email[cbx_email.find('@') + 1:]
                         contact_match = False
-                        if hc_domain in GENERIC_DOMAIN:
-                            contact_match = True if cbx_email == hc_email else False
+                        if hc_email:
+                            if hc_domain in GENERIC_DOMAIN:
+                                contact_match = True if cbx_email == hc_email else False
+                            else:
+                                contact_match = True if cbx_domain == hc_domain else False
                         else:
-                            contact_match = True if cbx_domain == hc_domain else False
+                            contact_match = False
                         cbx_zip = cbx_row[CBX_ZIP].replace(' ', '').upper()
                         cbx_company_en = re.sub(r"\([^()]*\)", "", cbx_row[CBX_COMPANY_EN])
                         cbx_company_en = cbx_company_en.lower().replace('.', '').replace(',', '').strip()
