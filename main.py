@@ -47,9 +47,9 @@ analysis_headers = ['cbx_id', 'cbx_contractor', 'cbx_street', 'cbx_city', 'cbx_s
                     'hiring_client_names', 'hiring_client_count',
                     'is_in_relationship', 'is_qualified', 'ratio_company', 'ratio_address',
                     'contact_match', 'generic_domain', 'match_count', 'match_count_with_hc',
-                    'analysis', 'is_subscription_upgrade', 'subscription_upgrade_price', 'create_in_cbx',
+                    'analysis', 'is_subscription_upgrade', 'upgrade_price', 'prorated_upgrade_price', 'create_in_cbx',
                     'hubspot_action', 'index']
-# todo added prorated subscription price
+
 metadata_headers = ['metadata_x', 'metadata_y', 'metadata_z', '...']
 
 # todo fix the subscription price
@@ -396,12 +396,14 @@ if __name__ == '__main__':
             hc_row.append(len([i for i in matches if i['hiring_client_count'] > 0]))
             hc_row.append('\n'.join(ids))
         else:
-            hc_row.extend(['' for x in range(len(analysis_headers)-5)])
+            hc_row.extend(['' for x in range(len(analysis_headers)-6)])
         subscription_upgrade = False
-        subscription_upgrade_price = 0.00
+        upgrade_price = 0.00
+        prorated_upgrade_price = 0.00
         create_in_cognibox = False if len(uniques_cbx_id) and not hc_row[HC_AMBIGUOUS] else True
         hc_row.append(subscription_upgrade)
-        hc_row.append(subscription_upgrade_price)
+        hc_row.append(upgrade_price)
+        hc_row.append(prorated_upgrade_price)
         hc_row.append(create_in_cognibox)
         hc_row.append(hubspot_action(hc_row, matches[0] if len(matches) else {}, create_in_cognibox,
                                      subscription_upgrade))
@@ -429,9 +431,9 @@ if __name__ == '__main__':
     for col, value in dims.items():
         out_ws.column_dimensions[col].width = value
 
-    out_ws.column_dimensions[get_column_letter(HC_HEADER_LENGTH+len(analysis_headers)-5)].width = 150
+    out_ws.column_dimensions[get_column_letter(HC_HEADER_LENGTH+len(analysis_headers)-6)].width = 150
     for i in range(2, len(hc_data)+1):
-        out_ws.cell(i, HC_HEADER_LENGTH+len(analysis_headers)-5).alignment = Alignment(wrapText=True)
+        out_ws.cell(i, HC_HEADER_LENGTH+len(analysis_headers)-6).alignment = Alignment(wrapText=True)
     tab.tableStyleInfo = style
     out_ws.add_table(tab)
     out_wb.save(filename=output_file)
