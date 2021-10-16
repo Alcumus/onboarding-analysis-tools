@@ -2,6 +2,9 @@ import argparse
 import csv
 import re
 import openpyxl
+from openpyxl.worksheet.table import Table, TableStyleInfo
+from openpyxl.utils import get_column_letter
+from openpyxl.styles import Alignment
 from fuzzywuzzy import fuzz
 
 CBX_HEADER_LENGTH = 23
@@ -391,7 +394,7 @@ if __name__ == '__main__':
             hc_row.append(True if hc_domain in GENERIC_DOMAIN else False)
             hc_row.append(len(uniques_cbx_id) if len(uniques_cbx_id) else '')
             hc_row.append(len([i for i in matches if i['hiring_client_count'] > 0]))
-            hc_row.append('|'.join(ids))
+            hc_row.append('\n'.join(ids))
         else:
             hc_row.extend(['' for x in range(len(analysis_headers)-5)])
         subscription_upgrade = False
@@ -412,5 +415,24 @@ if __name__ == '__main__':
         if index % 10:
             out_wb.save(filename=output_file)
         print(f'{index+1} of {total} [{len(uniques_cbx_id)} found]')
+
+
+    # formatting the excel...
+    tab = Table(displayName='results', ref=f'A1:{get_column_letter(len(hc_row))}{len(hc_data)+1}')
+    style = TableStyleInfo(name="TableStyleMedium2", showFirstColumn=False,
+                           showLastColumn=False, showRowStripes=True, showColumnStripes=False)
+    dims = {}
+    for row in out_ws.rows:
+        for cell in row:
+            if cell.value:
+                dims[cell.column_letter] = max((dims.get(cell.column_letter, 0), len(str(cell.value))))
+    for col, value in dims.items():
+        out_ws.column_dimensions[col].width = value
+
+    out_ws.column_dimensions[get_column_letter(HC_HEADER_LENGTH+len(analysis_headers)-5)].width = 150
+    for i in range(2, len(hc_data)+1):
+        out_ws.cell(i, HC_HEADER_LENGTH+len(analysis_headers)-5).alignment = Alignment(wrapText=True)
+    tab.tableStyleInfo = style
+    out_ws.add_table(tab)
     out_wb.save(filename=output_file)
     print(f'Completed data analysis...')
