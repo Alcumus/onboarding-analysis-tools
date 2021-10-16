@@ -3,19 +3,21 @@ import csv
 import re
 from fuzzywuzzy import fuzz
 
+CBX_HEADER_LENGTH = 23
 # noinspection SpellCheckingInspection
 CBX_ID, CBX_COMPANY_FR, CBX_COMPANY_EN, CBX_COMPANY_OLD, CBX_ADDRESS, CBX_CITY, CBX_STATE, \
     CBX_COUNTRY, CBX_ZIP, CBX_FISTNAME, CBX_LASTNAME, CBX_EMAIL, CBX_EXPIRATION_DATE, CBX_REGISTRATION_STATUS, \
     CBX_SUSPENDED, CBX_MODULES, CBX_ACCOUNT_TYPE, CBX_SUB_PRICE, CBX_EMPL_PRICE, CBX_HIRING_CLIENT_NAMES, \
-    CBX_HIRING_CLIENT_IDS, CBX_HIRING_CLIENT_QSTATUS, CBX_PARENTS = range(23)
+    CBX_HIRING_CLIENT_IDS, CBX_HIRING_CLIENT_QSTATUS, CBX_PARENTS = range(CBX_HEADER_LENGTH)
 
+HC_HEADER_LENGTH = 35
 HC_COMPANY, HC_FIRSTNAME, HC_LASTNAME, HC_EMAIL, HC_CONTACT_PHONE, HC_LANGUAGE, HC_STREET, HC_CITY, \
     HC_STATE, HC_COUNTRY, HC_ZIP, HC_CATEGORY, HC_DESCRIPTION, HC_PHONE, HC_WEBSITE,\
     HC_IS_TAKE_OVER, HC_TAKEOVER_RENEWAL_DATE, HC_TAKEOVER_QF_STATUS, \
     HC_PROJECT_NAME, HC_QUESTIONNAIRE_NAME, HC_QUESTIONNAIRE_ID, HC_PRICING_GROUP_ID, HC_PRICING_GROUP_CODE, \
     HC_HIRING_CLIENT_NAME, HC_HIRING_CLIENT_ID, HC_IS_ASSOCIATION_FEE, HC_BASE_SUBSCRIPTION_FEE, \
-    HC_CURRENCY, HC_AGENT_IN_CHARGE_ID, HC_INFORMATION_SHARED, HC_TIMEZONE, HC_DO_NOT_MATCH, HC_FORCE_CBX_ID, \
-    HC_AMBIGUOUS = range(34)
+    HC_CURRENCY, HC_AGENT_IN_CHARGE_ID, HC_TAKEOVER_FOLLOW_UP_DATE, HC_INFORMATION_SHARED, HC_TIMEZONE,\
+    HC_DO_NOT_MATCH, HC_FORCE_CBX_ID, HC_AMBIGUOUS = range(HC_HEADER_LENGTH)
 
 # noinspection SpellCheckingInspection
 cbx_headers = ['id', 'name_fr', 'name_en', 'old_names', 'address', 'city', 'state', 'country', 'postal_code',
@@ -30,18 +32,19 @@ hc_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'con
               'is_take_over', 'take_over_renewal_date',
               'take_over_qualification_status', 'batch', 'questionnaire_name', 'questionnaire_id',
               'pricing_group_id', 'pricing_group_code', 'hiring_client_name', 'hiring_client_id', 'is_association_fee',
-              'base_subscription_fee', 'currency', 'agent_in_charge_id', 'information_shared', 'timezone',
-              'do_not_match', 'force_cbx_id', 'ambiguous']
+              'base_subscription_fee', 'currency', 'agent_in_charge_id', 'take_over_follow-up_date',
+              'information_shared', 'timezone', 'do_not_match', 'force_cbx_id', 'ambiguous']
 
 # noinspection SpellCheckingInspection
 analysis_headers = ['cbx_id', 'cbx_contractor', 'cbx_street', 'cbx_city', 'cbx_state', 'cbx_zip', 'cbx_country',
                     'expiration_date', 'registration_status', 'suspended', 'cbx_email',
                     'cbx_first_name', 'cbx_last_name', 'modules', 'cbx_account_type',
-                    'cbx_subscription_fee', 'cbx_employee_price', 'is_subscription_upgrade', 'parents', 'previous',
+                    'cbx_subscription_fee', 'cbx_employee_price', 'parents', 'previous',
                     'hiring_client_names', 'hiring_client_count',
                     'is_in_relationship', 'is_qualified', 'ratio_company', 'ratio_address',
                     'contact_match', 'generic_domain', 'match_count', 'match_count_with_hc',
-                    'analysis', 'create_in_cbx', 'index']
+                    'analysis', 'is_subscription_upgrade', 'subscription_upgrade_price', 'create_in_cbx',
+                    'hubspot_action', 'index']
 
 metadata_headers = ['metadata_x', 'metadata_y', 'metadata_z', '...']
 
@@ -73,6 +76,12 @@ hc_headers_with_metadata.extend(metadata_headers)
 cbx_headers_text = '\n'.join([', '.join(x) for x in list(chunks(cbx_headers, 5))])
 hc_headers_text = '\n'.join([', '.join(x) for x in list(chunks(hc_headers_with_metadata, 5))])
 analysis_headers_text = '\n'.join([', '.join(x) for x in list(chunks(analysis_headers, 5))])
+
+if len(hc_headers) != HC_HEADER_LENGTH:
+    raise AssertionError('hc header inconsistencies')
+
+if len(cbx_headers) != CBX_HEADER_LENGTH:
+    raise AssertionError('cbx header inconsistencies')
 
 # define commandline parser
 parser = argparse.ArgumentParser(
@@ -155,12 +164,51 @@ def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, c
             'suspended': cbx_row[CBX_SUSPENDED], 'email': cbx_row[CBX_EMAIL], 'first_name': cbx_row[CBX_FISTNAME],
             'last_name': cbx_row[CBX_LASTNAME], 'modules': cbx_row[CBX_MODULES],
             'account_type': cbx_row[CBX_ACCOUNT_TYPE], 'subscription_price': cbx_row[CBX_SUB_PRICE],
-            'employee_price': cbx_row[CBX_EMPL_PRICE], 'is_subscription_upgrade': str(False),
+            'employee_price': cbx_row[CBX_EMPL_PRICE],
             'parents': cbx_row[CBX_PARENTS], 'previous': cbx_row[CBX_COMPANY_OLD],
             'hiring_client_names': cbx_row[CBX_HIRING_CLIENT_NAMES], 'hiring_client_count': hc_count,
             'is_in_relationship': is_in_relationship, 'is_qualified': str(is_qualified),
             'ratio_company': ratio_company, 'ratio_address': ratio_address, 'contact_match': str(contact_match),
             }
+
+
+def smart_boolean(bool_str):
+    bool_str = bool_str.lower().strip()
+    return True if bool_str in ('true', 'vraie', '1') else False
+
+
+# noinspection PyShadowingNames
+def hubspot_action(hc_data, cbx_data, create, subscription_update):
+    if create:
+        if smart_boolean(hc_data[HC_IS_TAKE_OVER]):
+            if hc_data[CBX_REGISTRATION_STATUS] == 'Suspended':
+                return 'restore_suspended'
+            else:
+                return 'activation_link'
+        else:
+            if hc_data[HC_AMBIGUOUS]:
+                return 'ambiguous_onboarding'
+            else:
+                return 'onboarding'
+    else:
+        reg_status = cbx_data['registration_status']
+        if smart_boolean(hc_data[HC_IS_TAKE_OVER]):
+            if reg_status == 'Suspended':
+                return 'restore_suspended'
+            else:
+                return 'activation_link'
+        else:
+            if reg_status == 'Active':
+                if subscription_update:
+                    return 'subscription_update'
+                elif hc_data[HC_IS_ASSOCIATION_FEE]:
+                    return 'association_fee'
+            elif reg_status == 'Suspended':
+                return 'restore_suspended'
+            elif reg_status == 'Non Member':
+                return 're_onboarding'
+            else:
+                raise AssertionError(f'invalid registration status: {reg_status}')
 
 
 def remove_generics(company_name):
@@ -261,7 +309,7 @@ if __name__ == '__main__':
             hc_zip = hc_row[HC_ZIP].replace(' ', '').upper()
             hc_address = hc_row[HC_STREET].lower().replace('.', '').strip()
             hc_force_cbx = hc_row[HC_FORCE_CBX_ID].strip()
-            if hc_row[HC_DO_NOT_MATCH].lower().strip() != 'true' and hc_row[HC_DO_NOT_MATCH].strip() != '1':
+            if not smart_boolean(hc_row[HC_DO_NOT_MATCH]):
                 if hc_force_cbx:
                     cbx_row = next(filter(lambda x: x[CBX_ID].strip() == hc_force_cbx, cbx_data), None)
                     if cbx_row:
@@ -337,8 +385,15 @@ if __name__ == '__main__':
                 hc_row.append(str(len([i for i in matches if i['hiring_client_count'] > 0])))
                 hc_row.append('|'.join(ids))
             else:
-                hc_row.extend(['' for x in range(len(analysis_headers)-2)])
-            hc_row.append(str(False if len(uniques_cbx_id) and not hc_row[HC_AMBIGUOUS] else True))
+                hc_row.extend(['' for x in range(len(analysis_headers)-5)])
+            subscription_upgrade = False
+            subscription_upgrade_price = 0.00
+            create_in_cognibox = False if len(uniques_cbx_id) and not hc_row[HC_AMBIGUOUS] else True
+            hc_row.append(str(subscription_upgrade))
+            hc_row.append(str(subscription_upgrade_price))
+            hc_row.append(str(create_in_cognibox))
+            hc_row.append(hubspot_action(hc_row, matches[0] if len(matches) else {}, create_in_cognibox,
+                                         subscription_upgrade))
             hc_row.append(str(index+1))
             metadata_array = []
             for md_index in metadata_indexes:
