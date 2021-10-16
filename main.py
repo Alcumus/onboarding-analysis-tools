@@ -1,6 +1,7 @@
 import argparse
 import csv
 import re
+import openpyxl
 from fuzzywuzzy import fuzz
 
 CBX_HEADER_LENGTH = 23
@@ -45,7 +46,7 @@ analysis_headers = ['cbx_id', 'cbx_contractor', 'cbx_street', 'cbx_city', 'cbx_s
                     'contact_match', 'generic_domain', 'match_count', 'match_count_with_hc',
                     'analysis', 'is_subscription_upgrade', 'subscription_upgrade_price', 'create_in_cbx',
                     'hubspot_action', 'index']
-
+# todo added prorated subscription price
 metadata_headers = ['metadata_x', 'metadata_y', 'metadata_z', '...']
 
 # todo fix the subscription price
@@ -92,9 +93,10 @@ parser.add_argument('cbx_list',
                     help=f'csv DB export file of business units with the following columns:\n{cbx_headers_text}\n\n')
 
 parser.add_argument('hc_list',
-                    help=f'csv file of the hiring client contractors and the following columns:\n{hc_headers_text}\n\n')
+                    help=f'xlsx file of the hiring client contractors and the '
+                         f'following columns:\n{hc_headers_text}\n\n')
 parser.add_argument('output',
-                    help=f'csv file with the hc_list columns and the following analysis columns:'
+                    help=f'the xlsx file to be created with the hc_list columns and the following analysis columns:'
                          f'\n{analysis_headers_text}\n\n**Please note that metadata columns from the'
                          f' hc file are moved after the analysis data')
 
@@ -119,14 +121,6 @@ parser.add_argument('--cbx_list_encoding', dest='cbx_encoding', action='store',
                     default='utf-8-sig',
                     help='Encoding for the cbx list (default: utf-8-sig)')
 
-parser.add_argument('--hc_list_encoding', dest='hc_encoding', action='store',
-                    default='utf-8-sig',
-                    help='Encoding for the hc list (default: utf-8-sig)')
-
-parser.add_argument('--output_encoding', dest='output_encoding', action='store',
-                    default='utf-8-sig',
-                    help='Encoding for the hc list (default: utf-8-sig)')
-
 parser.add_argument('--list_separator', dest='list_separator', action='store',
                     default=';',
                     help='string separator used for lists (default: ;)')
@@ -143,6 +137,11 @@ GENERIC_COMPANY_NAME_WORDS = BASE_GENERIC_COMPANY_NAME_WORDS + \
                              args.additional_generic_name_word.split(args.list_separator)
 
 
+def smart_boolean(bool_str):
+    bool_str = bool_str.lower().strip()
+    return True if bool_str in ('true', 'vraie', '1') else False
+
+
 # noinspection PyShadowingNames
 def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, contact_match=None):
     cbx_company = cbx_row[CBX_COMPANY_FR] if cbx_row[CBX_COMPANY_FR] else cbx_row[CBX_COMPANY_EN]
@@ -157,24 +156,20 @@ def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, c
         if val == hc_row[HC_HIRING_CLIENT_NAME] and hiring_clients_qstatus[idx] == 'validated':
             is_qualified = True
             break
-    return {'cbx_id': cbx_row[CBX_ID], 'company': cbx_company, 'address': cbx_row[CBX_ADDRESS],
+    return {'cbx_id': int(cbx_row[CBX_ID]), 'company': cbx_company, 'address': cbx_row[CBX_ADDRESS],
             'city': cbx_row[CBX_CITY], 'state': cbx_row[CBX_STATE], 'zip': cbx_row[CBX_ZIP],
             'country': cbx_row[CBX_COUNTRY], 'expiration_date': cbx_row[CBX_EXPIRATION_DATE],
             'registration_status': cbx_row[CBX_REGISTRATION_STATUS],
             'suspended': cbx_row[CBX_SUSPENDED], 'email': cbx_row[CBX_EMAIL], 'first_name': cbx_row[CBX_FISTNAME],
             'last_name': cbx_row[CBX_LASTNAME], 'modules': cbx_row[CBX_MODULES],
-            'account_type': cbx_row[CBX_ACCOUNT_TYPE], 'subscription_price': cbx_row[CBX_SUB_PRICE],
-            'employee_price': cbx_row[CBX_EMPL_PRICE],
+            'account_type': cbx_row[CBX_ACCOUNT_TYPE],
+            'subscription_price': float(cbx_row[CBX_SUB_PRICE]) if cbx_row[CBX_SUB_PRICE] else '',
+            'employee_price': float(cbx_row[CBX_EMPL_PRICE]) if cbx_row[CBX_EMPL_PRICE] else '',
             'parents': cbx_row[CBX_PARENTS], 'previous': cbx_row[CBX_COMPANY_OLD],
             'hiring_client_names': cbx_row[CBX_HIRING_CLIENT_NAMES], 'hiring_client_count': hc_count,
-            'is_in_relationship': is_in_relationship, 'is_qualified': str(is_qualified),
-            'ratio_company': ratio_company, 'ratio_address': ratio_address, 'contact_match': str(contact_match),
+            'is_in_relationship': is_in_relationship, 'is_qualified': is_qualified,
+            'ratio_company': ratio_company, 'ratio_address': ratio_address, 'contact_match': contact_match,
             }
-
-
-def smart_boolean(bool_str):
-    bool_str = bool_str.lower().strip()
-    return True if bool_str in ('true', 'vraie', '1') else False
 
 
 # noinspection PyShadowingNames
@@ -235,8 +230,8 @@ if __name__ == '__main__':
 
     # output parameters used
     print(f'Reading CBX list: {args.cbx_list} [{args.cbx_encoding}]')
-    print(f'Reading HC list: {args.hc_list} [{args.hc_encoding}]')
-    print(f'Outputting results in: {args.output} [{args.output_encoding}]')
+    print(f'Reading HC list: {args.hc_list}')
+    print(f'Outputting results in: {args.output}')
     print(f'contractor match ratio: {args.ratio_company}')
     print(f'address match ratio: {args.ratio_address}')
     print(f'list of "generic domains:\n{BASE_GENERIC_DOMAIN}')
@@ -260,9 +255,18 @@ if __name__ == '__main__':
     print(f'Completed reading {len(cbx_data)} contractors.')
 
     print('Reading hiring client data file...')
-    with open(hc_file, 'r', encoding=args.hc_encoding) as hc:
-        for row in csv.reader(hc):
-            hc_data.append(row)
+    hc_wb = openpyxl.load_workbook(hc_file, read_only=True)
+    hc_sheet = hc_wb.active
+    max_row = hc_sheet.max_row
+    max_column = hc_sheet.max_column
+    if max_column > 250 or max_row > 10000:
+        print(f'WARNING: file too big: {max_row} rows and {max_column}. must be less than 10000 and 250')
+        if not args.ignore_warnings:
+            exit(-1)
+    for row in hc_sheet.rows:
+        if not row[0].value:
+            continue
+        hc_data.append([cell.value if cell.value else '' for cell in row])
     total = len(hc_data) - 1
     metadata_indexes = []
     headers = []
@@ -282,123 +286,131 @@ if __name__ == '__main__':
                 exit(-1)
     print(f'Completed reading {len(hc_data)} contractors.')
     print(f'Starting data analysis...')
-    with open(output_file, 'w', newline='', encoding=args.output_encoding) as result_file:
-        writer = csv.writer(result_file)
-        # append analysis headers and move metadata headers at the end
-        if not args.no_headers:
-            for idx, val in enumerate(headers):
-                if val.lower().startswith('metadata'):
-                    metadata_indexes.append(idx)
-            metadata_indexes.sort(reverse=True)
-            headers.extend(analysis_headers)
-            metadata_array = []
-            for md_index in metadata_indexes:
-                metadata_array.insert(0, headers.pop(md_index))
-            headers.extend(metadata_array)
-            writer.writerow(headers)
 
-        # match
-        for index, hc_row in enumerate(hc_data):
-            matches = []
-            hc_company = hc_row[HC_COMPANY]
-            clean_hc_company = hc_company.lower().replace('.', '').replace(',', '').strip()
-            clean_hc_company = modified_string = re.sub(r"\([^()]*\)", "", clean_hc_company)
-            clean_hc_company = remove_generics(clean_hc_company)
-            hc_email = hc_row[HC_EMAIL].lower()
-            hc_domain = hc_email[hc_email.find('@') + 1:]
-            hc_zip = hc_row[HC_ZIP].replace(' ', '').upper()
-            hc_address = hc_row[HC_STREET].lower().replace('.', '').strip()
-            hc_force_cbx = hc_row[HC_FORCE_CBX_ID].strip()
-            if not smart_boolean(hc_row[HC_DO_NOT_MATCH]):
-                if hc_force_cbx:
-                    cbx_row = next(filter(lambda x: x[CBX_ID].strip() == hc_force_cbx, cbx_data), None)
-                    if cbx_row:
-                        matches.append(add_analysis_data(hc_row, cbx_row))
-                else:
-                    for cbx_row in cbx_data:
-                        cbx_email = cbx_row[CBX_EMAIL].lower()
-                        cbx_domain = cbx_email[cbx_email.find('@') + 1:]
-                        contact_match = False
-                        if hc_email:
-                            if hc_domain in GENERIC_DOMAIN:
-                                contact_match = True if cbx_email == hc_email else False
-                            else:
-                                contact_match = True if cbx_domain == hc_domain else False
-                        else:
-                            contact_match = False
-                        cbx_zip = cbx_row[CBX_ZIP].replace(' ', '').upper()
-                        cbx_company_en = re.sub(r"\([^()]*\)", "", cbx_row[CBX_COMPANY_EN])
-                        cbx_company_en = cbx_company_en.lower().replace('.', '').replace(',', '').strip()
-                        cbx_company_en = remove_generics(cbx_company_en)
-                        cbx_company_fr = re.sub(r"\([^()]*\)", "", cbx_row[CBX_COMPANY_FR])
-                        cbx_company_fr = cbx_company_fr.lower().replace('.', '').replace(',', '').strip()
-                        cbx_company_fr = remove_generics(cbx_company_fr)
-                        cbx_parents = cbx_row[CBX_PARENTS]
-                        cbx_previous = cbx_row[CBX_COMPANY_OLD]
-                        cbx_address = cbx_row[CBX_ADDRESS].lower().replace('.', '').strip()
-                        ratio_company_fr = fuzz.token_sort_ratio(cbx_company_fr, clean_hc_company)
-                        ratio_company_en = fuzz.token_sort_ratio(cbx_company_en, clean_hc_company)
-                        if cbx_row[CBX_COUNTRY] != hc_row[HC_COUNTRY]:
-                            ratio_zip = ratio_address = 0.0
-                        else:
-                            ratio_zip = fuzz.ratio(cbx_zip, hc_zip)
-                            ratio_address = fuzz.token_sort_ratio(cbx_address, hc_address)
-                            ratio_address = ratio_address if ratio_zip == 0 else ratio_zip if ratio_address == 0 \
-                                else ratio_address * ratio_zip / 100
-                        ratio_company = ratio_company_fr if ratio_company_fr > ratio_company_en else ratio_company_en
-                        ratio_previous = 0
-                        for item in cbx_previous.split(args.list_separator):
-                            if item in (cbx_company_en, cbx_company_fr):
-                                continue
-                            item = re.sub(r"\([^()]*\)", "", item)
-                            item = item.lower().replace('.', '').replace(',', '').strip()
-                            item = remove_generics(item)
-                            ratio = fuzz.token_sort_ratio(item.lower().replace('.', '').replace(',', '').strip(),
-                                                          clean_hc_company)
-                            ratio_previous = ratio if ratio > ratio_previous else ratio_previous
-                        ratio_company = ratio_previous if ratio_previous > ratio_company else ratio_company
-                        if (contact_match or (ratio_company >= float(args.ratio_company)
-                                              and ratio_address >= float(args.ratio_address))):
-                            matches.append(
-                                add_analysis_data(hc_row, cbx_row, ratio_company, ratio_address, contact_match))
-                        elif ratio_company >= 95.0 or (ratio_company >= float(args.ratio_company)
-                                                       and ratio_address >= float(args.ratio_address)):
-                            matches.append(
-                                add_analysis_data(hc_row, cbx_row, ratio_company, ratio_address, contact_match))
-            ids = []
-            best_match = 0
-            matches = sorted(matches, key=lambda x: (x['hiring_client_count'], x["ratio_address"], x["ratio_company"]),
-                             reverse=True)
-            for item in matches[0:10]:
-                ids.append(f'{item["cbx_id"]}, {item["company"]}, {item["address"]}, {item["zip"]}, {item["email"]}'
-                           f' --> CR{item["ratio_company"]}, AR{item["ratio_address"]},'
-                           f' CM{item["contact_match"]}, HCC{item["hiring_client_count"]}')
-            # append matching results to the hc_list
-            match_data = []
-            uniques_cbx_id = set(item['cbx_id'] for item in matches)
-            if uniques_cbx_id:
-                for key, value in matches[0].items():
-                    match_data.append(value)
-                hc_row.extend(match_data)
-                hc_row.append(str(True if hc_domain in GENERIC_DOMAIN else False))
-                hc_row.append(len(uniques_cbx_id) if len(uniques_cbx_id) else '')
-                hc_row.append(str(len([i for i in matches if i['hiring_client_count'] > 0])))
-                hc_row.append('|'.join(ids))
+    out_wb = openpyxl.Workbook()
+    out_ws = out_wb.active
+    out_ws.title = "results"
+
+    # append analysis headers and move metadata headers at the end
+    if not args.no_headers:
+        for idx, val in enumerate(headers):
+            if val.lower().startswith('metadata'):
+                metadata_indexes.append(idx)
+        metadata_indexes.sort(reverse=True)
+        headers.extend(analysis_headers)
+        metadata_array = []
+        for md_index in metadata_indexes:
+            metadata_array.insert(0, headers.pop(md_index))
+        headers.extend(metadata_array)
+        for index, value in enumerate(headers):
+            out_ws.cell(1, index+1, value)
+        out_wb.save(filename=output_file)
+    # match
+    for index, hc_row in enumerate(hc_data):
+        matches = []
+        hc_company = hc_row[HC_COMPANY]
+        clean_hc_company = hc_company.lower().replace('.', '').replace(',', '').strip()
+        clean_hc_company = modified_string = re.sub(r"\([^()]*\)", "", clean_hc_company)
+        clean_hc_company = remove_generics(clean_hc_company)
+        hc_email = hc_row[HC_EMAIL].lower()
+        hc_domain = hc_email[hc_email.find('@') + 1:]
+        hc_zip = hc_row[HC_ZIP].replace(' ', '').upper()
+        hc_address = hc_row[HC_STREET].lower().replace('.', '').strip()
+        hc_force_cbx = hc_row[HC_FORCE_CBX_ID].strip()
+        if not smart_boolean(hc_row[HC_DO_NOT_MATCH]):
+            if hc_force_cbx:
+                cbx_row = next(filter(lambda x: x[CBX_ID].strip() == hc_force_cbx, cbx_data), None)
+                if cbx_row:
+                    matches.append(add_analysis_data(hc_row, cbx_row))
             else:
-                hc_row.extend(['' for x in range(len(analysis_headers)-5)])
-            subscription_upgrade = False
-            subscription_upgrade_price = 0.00
-            create_in_cognibox = False if len(uniques_cbx_id) and not hc_row[HC_AMBIGUOUS] else True
-            hc_row.append(str(subscription_upgrade))
-            hc_row.append(str(subscription_upgrade_price))
-            hc_row.append(str(create_in_cognibox))
-            hc_row.append(hubspot_action(hc_row, matches[0] if len(matches) else {}, create_in_cognibox,
-                                         subscription_upgrade))
-            hc_row.append(str(index+1))
-            metadata_array = []
-            for md_index in metadata_indexes:
-                metadata_array.insert(0, hc_row.pop(md_index))
-            hc_row.extend(metadata_array)
-            writer.writerow(hc_row)
-            print(f'{index+1} of {total} [{len(uniques_cbx_id)} found]')
+                for cbx_row in cbx_data:
+                    cbx_email = cbx_row[CBX_EMAIL].lower()
+                    cbx_domain = cbx_email[cbx_email.find('@') + 1:]
+                    contact_match = False
+                    if hc_email:
+                        if hc_domain in GENERIC_DOMAIN:
+                            contact_match = True if cbx_email == hc_email else False
+                        else:
+                            contact_match = True if cbx_domain == hc_domain else False
+                    else:
+                        contact_match = False
+                    cbx_zip = cbx_row[CBX_ZIP].replace(' ', '').upper()
+                    cbx_company_en = re.sub(r"\([^()]*\)", "", cbx_row[CBX_COMPANY_EN])
+                    cbx_company_en = cbx_company_en.lower().replace('.', '').replace(',', '').strip()
+                    cbx_company_en = remove_generics(cbx_company_en)
+                    cbx_company_fr = re.sub(r"\([^()]*\)", "", cbx_row[CBX_COMPANY_FR])
+                    cbx_company_fr = cbx_company_fr.lower().replace('.', '').replace(',', '').strip()
+                    cbx_company_fr = remove_generics(cbx_company_fr)
+                    cbx_parents = cbx_row[CBX_PARENTS]
+                    cbx_previous = cbx_row[CBX_COMPANY_OLD]
+                    cbx_address = cbx_row[CBX_ADDRESS].lower().replace('.', '').strip()
+                    ratio_company_fr = fuzz.token_sort_ratio(cbx_company_fr, clean_hc_company)
+                    ratio_company_en = fuzz.token_sort_ratio(cbx_company_en, clean_hc_company)
+                    if cbx_row[CBX_COUNTRY] != hc_row[HC_COUNTRY]:
+                        ratio_zip = ratio_address = 0.0
+                    else:
+                        ratio_zip = fuzz.ratio(cbx_zip, hc_zip)
+                        ratio_address = fuzz.token_sort_ratio(cbx_address, hc_address)
+                        ratio_address = ratio_address if ratio_zip == 0 else ratio_zip if ratio_address == 0 \
+                            else ratio_address * ratio_zip / 100
+                    ratio_company = ratio_company_fr if ratio_company_fr > ratio_company_en else ratio_company_en
+                    ratio_previous = 0
+                    for item in cbx_previous.split(args.list_separator):
+                        if item in (cbx_company_en, cbx_company_fr):
+                            continue
+                        item = re.sub(r"\([^()]*\)", "", item)
+                        item = item.lower().replace('.', '').replace(',', '').strip()
+                        item = remove_generics(item)
+                        ratio = fuzz.token_sort_ratio(item.lower().replace('.', '').replace(',', '').strip(),
+                                                      clean_hc_company)
+                        ratio_previous = ratio if ratio > ratio_previous else ratio_previous
+                    ratio_company = ratio_previous if ratio_previous > ratio_company else ratio_company
+                    if (contact_match or (ratio_company >= float(args.ratio_company)
+                                          and ratio_address >= float(args.ratio_address))):
+                        matches.append(
+                            add_analysis_data(hc_row, cbx_row, ratio_company, ratio_address, contact_match))
+                    elif ratio_company >= 95.0 or (ratio_company >= float(args.ratio_company)
+                                                   and ratio_address >= float(args.ratio_address)):
+                        matches.append(
+                            add_analysis_data(hc_row, cbx_row, ratio_company, ratio_address, contact_match))
+        ids = []
+        best_match = 0
+        matches = sorted(matches, key=lambda x: (x['hiring_client_count'], x["ratio_address"], x["ratio_company"]),
+                         reverse=True)
+        for item in matches[0:10]:
+            ids.append(f'{item["cbx_id"]}, {item["company"]}, {item["address"]}, {item["zip"]}, {item["email"]}'
+                       f' --> CR{item["ratio_company"]}, AR{item["ratio_address"]},'
+                       f' CM{item["contact_match"]}, HCC{item["hiring_client_count"]}')
+        # append matching results to the hc_list
+        match_data = []
+        uniques_cbx_id = set(item['cbx_id'] for item in matches)
+        if uniques_cbx_id:
+            for key, value in matches[0].items():
+                match_data.append(value)
+            hc_row.extend(match_data)
+            hc_row.append(True if hc_domain in GENERIC_DOMAIN else False)
+            hc_row.append(len(uniques_cbx_id) if len(uniques_cbx_id) else '')
+            hc_row.append(len([i for i in matches if i['hiring_client_count'] > 0]))
+            hc_row.append('|'.join(ids))
+        else:
+            hc_row.extend(['' for x in range(len(analysis_headers)-5)])
+        subscription_upgrade = False
+        subscription_upgrade_price = 0.00
+        create_in_cognibox = False if len(uniques_cbx_id) and not hc_row[HC_AMBIGUOUS] else True
+        hc_row.append(subscription_upgrade)
+        hc_row.append(subscription_upgrade_price)
+        hc_row.append(create_in_cognibox)
+        hc_row.append(hubspot_action(hc_row, matches[0] if len(matches) else {}, create_in_cognibox,
+                                     subscription_upgrade))
+        hc_row.append(index+1)
+        metadata_array = []
+        for md_index in metadata_indexes:
+            metadata_array.insert(0, hc_row.pop(md_index))
+        hc_row.extend(metadata_array)
+        for i, value in enumerate(hc_row):
+            out_ws.cell(index+2, i+1, value)
+        if index % 10:
+            out_wb.save(filename=output_file)
+        print(f'{index+1} of {total} [{len(uniques_cbx_id)} found]')
+    out_wb.save(filename=output_file)
     print(f'Completed data analysis...')
