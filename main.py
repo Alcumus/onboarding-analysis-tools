@@ -140,10 +140,12 @@ GENERIC_COMPANY_NAME_WORDS = BASE_GENERIC_COMPANY_NAME_WORDS + \
                              args.additional_generic_name_word.split(args.list_separator)
 
 
-def smart_boolean(bool_str):
-    bool_str = bool_str.lower().strip()
-    return True if bool_str in ('true', 'vraie', '1') else False
-
+def smart_boolean(bool_data):
+    if isinstance(bool_data,str):
+        bool_data = bool_data.lower().strip()
+        return True if bool_data in ('true', 'vraie', '1') else False
+    else:
+        return bool(bool_data)
 
 # noinspection PyShadowingNames
 def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, contact_match=None):
@@ -263,7 +265,7 @@ if __name__ == '__main__':
     max_row = hc_sheet.max_row
     max_column = hc_sheet.max_column
     if max_column > 250 or max_row > 10000:
-        print(f'WARNING: file too big: {max_row} rows and {max_column}. must be less than 10000 and 250')
+        print(f'WARNING: File is large: {max_row} rows and {max_column}. must be less than 10000 and 250')
         if not args.ignore_warnings:
             exit(-1)
     for row in hc_sheet.rows:
@@ -319,7 +321,7 @@ if __name__ == '__main__':
         hc_domain = hc_email[hc_email.find('@') + 1:]
         hc_zip = hc_row[HC_ZIP].replace(' ', '').upper()
         hc_address = hc_row[HC_STREET].lower().replace('.', '').strip()
-        hc_force_cbx = hc_row[HC_FORCE_CBX_ID].strip()
+        hc_force_cbx = smart_boolean(hc_row[HC_FORCE_CBX_ID])
         if not smart_boolean(hc_row[HC_DO_NOT_MATCH]):
             if hc_force_cbx:
                 cbx_row = next(filter(lambda x: x[CBX_ID].strip() == hc_force_cbx, cbx_data), None)
@@ -418,7 +420,6 @@ if __name__ == '__main__':
             out_wb.save(filename=output_file)
         print(f'{index+1} of {total} [{len(uniques_cbx_id)} found]')
 
-
     # formatting the excel...
     tab = Table(displayName='results', ref=f'A1:{get_column_letter(len(hc_row))}{len(hc_data)+1}')
     style = TableStyleInfo(name="TableStyleMedium2", showFirstColumn=False,
@@ -430,7 +431,6 @@ if __name__ == '__main__':
                 dims[cell.column_letter] = max((dims.get(cell.column_letter, 0), len(str(cell.value))))
     for col, value in dims.items():
         out_ws.column_dimensions[col].width = value
-
     out_ws.column_dimensions[get_column_letter(HC_HEADER_LENGTH+len(analysis_headers)-6)].width = 150
     for i in range(2, len(hc_data)+1):
         out_ws.cell(i, HC_HEADER_LENGTH+len(analysis_headers)-6).alignment = Alignment(wrapText=True)
