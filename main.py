@@ -103,6 +103,17 @@ parser.add_argument('output',
                          f'\n{analysis_headers_text}\n\n**Please note that metadata columns from the'
                          f' hc file are moved after the analysis data')
 
+
+parser.add_argument('--hc_list_sheet_name', dest='hc_list_sheet_name', action='store',
+                    default=None,
+                    help='specify the sheet in the excel file where the hiring client data is located'
+                         ' (default separator is the active sheet)')
+
+parser.add_argument('--hc_list_offset', dest='hc_list_offset', action='store',
+                    default=None,
+                    help='offset where the data starts in the form of <row>,<column> (default is 1,1). '
+                         'This includes the headers')
+
 parser.add_argument('--min_company_match_ratio', dest='ratio_company', action='store',
                     default=80,
                     help='Minimum match ratio for contractors, between 0 and 100 (default 80)')
@@ -261,14 +272,26 @@ if __name__ == '__main__':
 
     print('Reading hiring client data file...')
     hc_wb = openpyxl.load_workbook(hc_file, read_only=True)
-    hc_sheet = hc_wb.active
+    if args.hc_list_sheet_name:
+        hc_sheet = hc_wb.get_sheet_by_name(args.hc_list_sheet_name)
+    else:
+        hc_sheet = hc_wb.active
     max_row = hc_sheet.max_row
     max_column = hc_sheet.max_column
+    row_offset = 0 if not args.hc_list_offset else int(args.hc_list_offset.split(',')[0])-1
+    column_offset = 0 if not args.hc_list_offset else int(args.hc_list_offset.split(',')[1])-1
+
     if max_column > 250 or max_row > 10000:
         print(f'WARNING: File is large: {max_row} rows and {max_column}. must be less than 10000 and 250')
         if not args.ignore_warnings:
             exit(-1)
     for row in hc_sheet.rows:
+        # start data retrieval at offset
+        while row_offset:
+            next(hc_sheet.rows)
+            row_offset -= 1
+        row = row[column_offset:]
+        # retrieve
         if not row[0].value:
             continue
         hc_data.append([cell.value if cell.value else '' for cell in row])
