@@ -6,6 +6,7 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment
 from fuzzywuzzy import fuzz
+from datetime import datetime
 
 CBX_HEADER_LENGTH = 23
 # noinspection SpellCheckingInspection
@@ -152,11 +153,12 @@ GENERIC_COMPANY_NAME_WORDS = BASE_GENERIC_COMPANY_NAME_WORDS + \
 
 
 def smart_boolean(bool_data):
-    if isinstance(bool_data,str):
+    if isinstance(bool_data, str):
         bool_data = bool_data.lower().strip()
         return True if bool_data in ('true', 'vraie', '1') else False
     else:
         return bool(bool_data)
+
 
 # noinspection PyShadowingNames
 def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, contact_match=None):
@@ -238,6 +240,13 @@ def check_headers(headers, standards, ignore):
                 exit(-1)
 
 
+def clean_company_name(name):
+    name = name.lower().replace('.', '').replace(',', '').strip()
+    name = re.sub(r"\([^()]*\)", "", name)
+    name = remove_generics(name)
+    return name
+
+
 if __name__ == '__main__':
     data_path = './data/'
     cbx_file = data_path + args.cbx_list
@@ -245,6 +254,7 @@ if __name__ == '__main__':
     output_file = data_path + args.output
 
     # output parameters used
+    print(f'Starting at {datetime.now()}')
     print(f'Reading CBX list: {args.cbx_list} [{args.cbx_encoding}]')
     print(f'Reading HC list: {args.hc_list}')
     print(f'Outputting results in: {args.output}')
@@ -255,6 +265,7 @@ if __name__ == '__main__':
     # read data
     cbx_data = []
     hc_data = []
+    hc_row = []
     print('Reading Cognibox data file...')
     with open(cbx_file, 'r', encoding=args.cbx_encoding) as cbx:
         for row in csv.reader(cbx):
@@ -337,9 +348,8 @@ if __name__ == '__main__':
     for index, hc_row in enumerate(hc_data):
         matches = []
         hc_company = hc_row[HC_COMPANY]
-        clean_hc_company = hc_company.lower().replace('.', '').replace(',', '').strip()
-        clean_hc_company = modified_string = re.sub(r"\([^()]*\)", "", clean_hc_company)
-        clean_hc_company = remove_generics(clean_hc_company)
+
+        clean_hc_company = clean_company_name(hc_company)
         hc_email = hc_row[HC_EMAIL].lower()
         hc_domain = hc_email[hc_email.find('@') + 1:]
         hc_zip = hc_row[HC_ZIP].replace(' ', '').upper()
@@ -363,12 +373,8 @@ if __name__ == '__main__':
                     else:
                         contact_match = False
                     cbx_zip = cbx_row[CBX_ZIP].replace(' ', '').upper()
-                    cbx_company_en = re.sub(r"\([^()]*\)", "", cbx_row[CBX_COMPANY_EN])
-                    cbx_company_en = cbx_company_en.lower().replace('.', '').replace(',', '').strip()
-                    cbx_company_en = remove_generics(cbx_company_en)
-                    cbx_company_fr = re.sub(r"\([^()]*\)", "", cbx_row[CBX_COMPANY_FR])
-                    cbx_company_fr = cbx_company_fr.lower().replace('.', '').replace(',', '').strip()
-                    cbx_company_fr = remove_generics(cbx_company_fr)
+                    cbx_company_en = clean_company_name(cbx_row[CBX_COMPANY_EN])
+                    cbx_company_fr = clean_company_name(cbx_row[CBX_COMPANY_FR])
                     cbx_parents = cbx_row[CBX_PARENTS]
                     cbx_previous = cbx_row[CBX_COMPANY_OLD]
                     cbx_address = cbx_row[CBX_ADDRESS].lower().replace('.', '').strip()
@@ -384,13 +390,10 @@ if __name__ == '__main__':
                     ratio_company = ratio_company_fr if ratio_company_fr > ratio_company_en else ratio_company_en
                     ratio_previous = 0
                     for item in cbx_previous.split(args.list_separator):
-                        if item in (cbx_company_en, cbx_company_fr):
+                        if item in (cbx_row[CBX_COMPANY_EN], cbx_row[CBX_COMPANY_FR]):
                             continue
-                        item = re.sub(r"\([^()]*\)", "", item)
-                        item = item.lower().replace('.', '').replace(',', '').strip()
-                        item = remove_generics(item)
-                        ratio = fuzz.token_sort_ratio(item.lower().replace('.', '').replace(',', '').strip(),
-                                                      clean_hc_company)
+                        item = clean_company_name(item)
+                        ratio = fuzz.token_sort_ratio(item, clean_hc_company)
                         ratio_previous = ratio if ratio > ratio_previous else ratio_previous
                     ratio_company = ratio_previous if ratio_previous > ratio_company else ratio_company
                     if (contact_match or (ratio_company >= float(args.ratio_company)
@@ -461,3 +464,4 @@ if __name__ == '__main__':
     out_ws.add_table(tab)
     out_wb.save(filename=output_file)
     print(f'Completed data analysis...')
+    print(f'Completed at {datetime.now()}')
