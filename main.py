@@ -8,11 +8,12 @@ from openpyxl.styles import Alignment
 from fuzzywuzzy import fuzz
 from datetime import datetime
 
-CBX_HEADER_LENGTH = 23
+CBX_HEADER_LENGTH = 26
 # noinspection SpellCheckingInspection
 CBX_ID, CBX_COMPANY_FR, CBX_COMPANY_EN, CBX_COMPANY_OLD, CBX_ADDRESS, CBX_CITY, CBX_STATE, \
     CBX_COUNTRY, CBX_ZIP, CBX_FISTNAME, CBX_LASTNAME, CBX_EMAIL, CBX_EXPIRATION_DATE, CBX_REGISTRATION_STATUS, \
-    CBX_SUSPENDED, CBX_MODULES, CBX_ACCOUNT_TYPE, CBX_SUB_PRICE, CBX_EMPL_PRICE, CBX_HIRING_CLIENT_NAMES, \
+    CBX_SUSPENDED, CBX_MODULES, CBX_ACCESS_MODES, CBX_ACCOUNT_TYPE, CBX_SUB_PRICE_CAD, CBX_EMPL_PRICE_CAD,\
+    CBX_SUB_PRICE_USD, CBX_EMPL_PRICE_USD, CBX_HIRING_CLIENT_NAMES, \
     CBX_HIRING_CLIENT_IDS, CBX_HIRING_CLIENT_QSTATUS, CBX_PARENTS = range(CBX_HEADER_LENGTH)
 
 HC_HEADER_LENGTH = 35
@@ -24,10 +25,13 @@ HC_COMPANY, HC_FIRSTNAME, HC_LASTNAME, HC_EMAIL, HC_CONTACT_PHONE, HC_LANGUAGE, 
     HC_CURRENCY, HC_AGENT_IN_CHARGE_ID, HC_TAKEOVER_FOLLOW_UP_DATE, HC_INFORMATION_SHARED, HC_TIMEZONE,\
     HC_DO_NOT_MATCH, HC_FORCE_CBX_ID, HC_AMBIGUOUS = range(HC_HEADER_LENGTH)
 
+SUPPORTED_CURRENCIES = ('CAD', 'USD')
+
 # noinspection SpellCheckingInspection
 cbx_headers = ['id', 'name_fr', 'name_en', 'old_names', 'address', 'city', 'state', 'country', 'postal_code',
                'first_name', 'last_name', 'email', 'cbx_expiration_date', 'registration_code', 'suspended',
-               'modules', 'code', 'subscription_price', 'employee_price', 'hiring_client_names',
+               'modules', 'access_modes', 'code', 'subscription_price_cad', 'employee_price_cad',
+               'subscription_price_usd', 'employee_price_usd', 'hiring_client_names',
                'hiring_client_ids', 'hiring_client_qstatus', 'parents']
 
 # noinspection SpellCheckingInspection
@@ -170,6 +174,12 @@ def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, c
     is_in_relationship = True if (
             hc_row[HC_HIRING_CLIENT_NAME] in hiring_clients_list and hc_row[HC_HIRING_CLIENT_NAME]) else False
     is_qualified = False
+    sub_price_usd = float(cbx_row[CBX_SUB_PRICE_USD]) if cbx_row[CBX_SUB_PRICE_USD] else 0.0
+    employee_price_usd = float(cbx_row[CBX_EMPL_PRICE_USD]) if cbx_row[CBX_EMPL_PRICE_USD] else 0.0
+    sub_price_cad = float(cbx_row[CBX_SUB_PRICE_CAD]) if cbx_row[CBX_SUB_PRICE_CAD] else 0.0
+    employee_price_cad = float(cbx_row[CBX_EMPL_PRICE_CAD]) if cbx_row[CBX_EMPL_PRICE_CAD] else 0.0
+    if hc_row[HC_CURRENCY] not in SUPPORTED_CURRENCIES:
+        raise AssertionError(f'Invalid currency: {hc_row[HC_CURRENCY]}, must be in {SUPPORTED_CURRENCIES}')
     for idx, val in enumerate(hiring_clients_list):
         if val == hc_row[HC_HIRING_CLIENT_NAME] and hiring_clients_qstatus[idx] == 'validated':
             is_qualified = True
@@ -181,8 +191,8 @@ def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, c
             'suspended': cbx_row[CBX_SUSPENDED], 'email': cbx_row[CBX_EMAIL], 'first_name': cbx_row[CBX_FISTNAME],
             'last_name': cbx_row[CBX_LASTNAME], 'modules': cbx_row[CBX_MODULES],
             'account_type': cbx_row[CBX_ACCOUNT_TYPE],
-            'subscription_price': float(cbx_row[CBX_SUB_PRICE]) if cbx_row[CBX_SUB_PRICE] else '',
-            'employee_price': float(cbx_row[CBX_EMPL_PRICE]) if cbx_row[CBX_EMPL_PRICE] else '',
+            'subscription_price': sub_price_cad if hc_row[HC_CURRENCY] == "CAD" else sub_price_usd,
+            'employee_price': employee_price_cad if hc_row[HC_CURRENCY] == "CAD" else employee_price_usd,
             'parents': cbx_row[CBX_PARENTS], 'previous': cbx_row[CBX_COMPANY_OLD],
             'hiring_client_names': cbx_row[CBX_HIRING_CLIENT_NAMES], 'hiring_client_count': hc_count,
             'is_in_relationship': is_in_relationship, 'is_qualified': is_qualified,
@@ -279,6 +289,11 @@ if __name__ == '__main__':
         headers = cbx_data.pop(0)
         headers = [x.lower().strip() for x in headers]
         check_headers(headers, cbx_headers, args.ignore_warnings)
+    for index, row in enumerate(cbx_data):
+        access_modes = row[CBX_ACCESS_MODES].split(';')
+        # only keep contractors on Non-member without any access mode (ignore training and hiring clients)
+        if 'Contractor' not in access_modes and access_modes:
+            cbx_data.pop(index)
     print(f'Completed reading {len(cbx_data)} contractors.')
 
     print('Reading hiring client data file...')
@@ -323,6 +338,20 @@ if __name__ == '__main__':
             print(f'WARNING: got {len(hc_data[0])} columns when {len(hc_headers)} is exactly expected')
             if not args.ignore_warnings:
                 exit(-1)
+    # checking currency integrity
+    for row in hc_data:
+        if row[HC_COUNTRY].lower().strip() == 'ca':
+            if row[HC_CURRENCY].lower().strip() != 'cad':
+                print(f'WARNING: currency and country mismatch: {row[HC_CURRENCY]} and'
+                      f' {row[HC_COUNTRY]}. Expected CAD')
+                if not args.ignore_warnings:
+                    exit(-1)
+        else:
+            if row[HC_CURRENCY].lower().strip() != 'usd':
+                print(f'WARNING: currency and country mismatch: {row[HC_CURRENCY]} and'
+                      f' {row[HC_COUNTRY]}. Expected USD')
+                if not args.ignore_warnings:
+                    exit(-1)
     print(f'Completed reading {len(hc_data)} contractors.')
     print(f'Starting data analysis...')
 
@@ -415,6 +444,9 @@ if __name__ == '__main__':
         # append matching results to the hc_list
         match_data = []
         uniques_cbx_id = set(item['cbx_id'] for item in matches)
+        subscription_upgrade = False
+        upgrade_price = 0.00
+        prorated_upgrade_price = 0.00
         if uniques_cbx_id:
             for key, value in matches[0].items():
                 match_data.append(value)
@@ -423,11 +455,24 @@ if __name__ == '__main__':
             hc_row.append(len(uniques_cbx_id) if len(uniques_cbx_id) else '')
             hc_row.append(len([i for i in matches if i['hiring_client_count'] > 0]))
             hc_row.append('\n'.join(ids))
+            # Calculate subscription upgrade and prorating
+            current_sub_total = matches[0]['subscription_price'] + matches[0]['employee_price']
+            price_diff = float(hc_row[HC_BASE_SUBSCRIPTION_FEE]) - current_sub_total
+            if price_diff > 0 and matches[0]['registration_status'] == 'Active' and matches[0]['expiration_date'] \
+                    and current_sub_total > 0.0:
+                subscription_upgrade = True
+                upgrade_price = price_diff
+                expiration = matches[0]['expiration_date']
+                expiration_date = datetime.strptime(expiration, "%Y-%m-%d")
+                now = datetime.now()
+                if expiration_date > now:
+                    delta = expiration_date - now
+                    days = delta.days if delta.days < 365 else 365
+                    prorated_upgrade_price = days / 365 * upgrade_price
+                else:
+                    prorated_upgrade_price = upgrade_price
         else:
             hc_row.extend(['' for x in range(len(analysis_headers)-6)])
-        subscription_upgrade = False
-        upgrade_price = 0.00
-        prorated_upgrade_price = 0.00
         create_in_cognibox = False if len(uniques_cbx_id) and not hc_row[HC_AMBIGUOUS] else True
         hc_row.append(subscription_upgrade)
         hc_row.append(upgrade_price)
