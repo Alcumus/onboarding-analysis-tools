@@ -66,7 +66,7 @@ BASE_GENERIC_DOMAIN = ['yahoo.ca', 'yahoo.com', 'hotmail.com', 'gmail.com', 'out
                        'hotmail.ca', 'live.ca', 'icloud.com', 'hotmail.fr', 'yahoo.com', 'outlook.fr', 'msn.com',
                        'globetrotter.net', 'live.com', 'sympatico.ca', 'live.fr', 'yahoo.fr', 'telus.net',
                        'shaw.ca', 'me.com', 'bell.net',
-                       '', 'videotron.qc.ca', 'ivic.qc.ca', 'qc.aira.com', 'canada.ca', 'axion.ca']
+                       '', 'videotron.qc.ca', 'ivic.qc.ca', 'qc.aira.com', 'canada.ca', 'axion.ca', 'bellsouth.net', ]
 # noinspection SpellCheckingInspection
 BASE_GENERIC_COMPANY_NAME_WORDS = ['construction', 'contracting', 'industriel', 'industriels', 'service',
                                    'services', 'inc', 'limited', 'ltd', 'ltee', 'ltée', 'co', 'industrial',
@@ -201,13 +201,19 @@ def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, c
 
 
 # noinspection PyShadowingNames
-def hubspot_action(hc_data, cbx_data, create, subscription_update):
+def hubspot_action(hc_data, cbx_data, create, subscription_update, ignore):
     if create:
         if smart_boolean(hc_data[HC_IS_TAKE_OVER]):
             if hc_data[CBX_REGISTRATION_STATUS] == 'Suspended':
                 return 'restore_suspended'
-            else:
+            elif hc_data[CBX_REGISTRATION_STATUS] == 'Active':
+                return ''
+            elif hc_data[CBX_REGISTRATION_STATUS] == 'Non Member':
                 return 'activation_link'
+            else:
+                print(f'WARNING: invalid registration status {hc_data[CBX_REGISTRATION_STATUS]}')
+                if not ignore:
+                    exit(-1)
         else:
             if hc_data[HC_AMBIGUOUS]:
                 return 'ambiguous_onboarding'
@@ -218,13 +224,21 @@ def hubspot_action(hc_data, cbx_data, create, subscription_update):
         if smart_boolean(hc_data[HC_IS_TAKE_OVER]):
             if reg_status == 'Suspended':
                 return 'restore_suspended'
-            else:
+            elif reg_status == 'Active':
+                return ''
+            elif reg_status == 'Non Member':
                 return 'activation_link'
+            else:
+                print(f'WARNING: invalid registration status {hc_data[CBX_REGISTRATION_STATUS]}')
+                if not ignore:
+                    exit(-1)
         else:
             if reg_status == 'Active':
+                if cbx_data['is_in_relationship']:
+                    return ''
                 if subscription_update:
                     return 'subscription_update'
-                elif hc_data[HC_IS_ASSOCIATION_FEE]:
+                elif hc_data[HC_IS_ASSOCIATION_FEE] and cbx_data['is_in_relationship']:
                     return 'association_fee'
             elif reg_status == 'Suspended':
                 return 'restore_suspended'
@@ -479,7 +493,7 @@ if __name__ == '__main__':
         hc_row.append(prorated_upgrade_price)
         hc_row.append(create_in_cognibox)
         hc_row.append(hubspot_action(hc_row, matches[0] if len(matches) else {}, create_in_cognibox,
-                                     subscription_upgrade))
+                                     subscription_upgrade, args.ignore_warnings))
         hc_row.append(index+1)
         metadata_array = []
         for md_index in metadata_indexes:
