@@ -477,7 +477,7 @@ if __name__ == '__main__':
                 subscription_upgrade = True
                 upgrade_price = price_diff
                 expiration = matches[0]['expiration_date']
-                expiration_date = datetime.strptime(expiration, "%Y-%m-%d")
+                expiration_date = datetime.strptime(expiration, "%d-%m-%Y")
                 now = datetime.now()
                 if expiration_date > now:
                     delta = expiration_date - now
