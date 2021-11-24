@@ -242,7 +242,7 @@ def hubspot_action(hc_data, cbx_data, create, subscription_update, ignore):
                     return 'association_fee'
             elif reg_status == 'Suspended':
                 return 'restore_suspended'
-            elif reg_status == 'Non Member':
+            elif reg_status in ('Non Member', '', None):
                 return 're_onboarding'
             else:
                 raise AssertionError(f'invalid registration status: {reg_status}')
