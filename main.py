@@ -393,10 +393,10 @@ if __name__ == '__main__':
         hc_company = hc_row[HC_COMPANY]
 
         clean_hc_company = clean_company_name(hc_company)
-        hc_email = hc_row[HC_EMAIL].lower()
+        hc_email = str(hc_row[HC_EMAIL]).lower()
         hc_domain = hc_email[hc_email.find('@') + 1:]
-        hc_zip = hc_row[HC_ZIP].replace(' ', '').upper()
-        hc_address = hc_row[HC_STREET].lower().replace('.', '').strip()
+        hc_zip = str(hc_row[HC_ZIP]).replace(' ', '').upper()
+        hc_address = str(hc_row[HC_STREET]).lower().replace('.', '').strip()
         hc_force_cbx = smart_boolean(hc_row[HC_FORCE_CBX_ID])
         if not smart_boolean(hc_row[HC_DO_NOT_MATCH]):
             if hc_force_cbx:
