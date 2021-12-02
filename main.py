@@ -517,8 +517,16 @@ if __name__ == '__main__':
     for col, value in dims.items():
         out_ws.column_dimensions[col].width = value
     out_ws.column_dimensions[get_column_letter(HC_HEADER_LENGTH+len(analysis_headers)-6)].width = 150
+    out_ws.column_dimensions[get_column_letter(HC_HEADER_LENGTH+len(analysis_headers)-16)].width = 150
+    out_ws.column_dimensions[get_column_letter(HC_HEADER_LENGTH+len(analysis_headers)-17)].width = 150
+    out_ws.column_dimensions[get_column_letter(HC_HEADER_LENGTH+len(analysis_headers)-18)].width = 150
+
     for i in range(2, len(hc_data)+1):
         out_ws.cell(i, HC_HEADER_LENGTH+len(analysis_headers)-6).alignment = Alignment(wrapText=True)
+        out_ws.cell(i, HC_HEADER_LENGTH+len(analysis_headers)-16).alignment = Alignment(wrapText=True)
+        out_ws.cell(i, HC_HEADER_LENGTH+len(analysis_headers)-17).alignment = Alignment(wrapText=True)
+        out_ws.cell(i, HC_HEADER_LENGTH+len(analysis_headers)-18).alignment = Alignment(wrapText=True)
+
     tab.tableStyleInfo = style
     out_ws.add_table(tab)
     out_wb.save(filename=output_file)
