@@ -397,7 +397,7 @@ if __name__ == '__main__':
         hc_domain = hc_email[hc_email.find('@') + 1:]
         hc_zip = str(hc_row[HC_ZIP]).replace(' ', '').upper()
         hc_address = str(hc_row[HC_STREET]).lower().replace('.', '').strip()
-        hc_force_cbx = int(hc_row[HC_FORCE_CBX_ID])
+        hc_force_cbx = str(hc_row[HC_FORCE_CBX_ID])
         if not smart_boolean(hc_row[HC_DO_NOT_MATCH]):
             if hc_force_cbx:
                 cbx_row = next(filter(lambda x: x[CBX_ID].strip() == hc_force_cbx, cbx_data), None)
