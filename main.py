@@ -394,6 +394,11 @@ if __name__ == '__main__':
 
         clean_hc_company = clean_company_name(hc_company)
         hc_email = str(hc_row[HC_EMAIL]).lower()
+        # if multiple values use the first one...
+        hc_email = hc_email.split(';')[0]
+        hc_email = hc_email.split('\n')[0]
+        hc_email = hc_email.split(',')[0]
+        hc_email = hc_email.strip()
         hc_domain = hc_email[hc_email.find('@') + 1:]
         hc_zip = str(hc_row[HC_ZIP]).replace(' ', '').upper()
         hc_address = str(hc_row[HC_STREET]).lower().replace('.', '').strip()
