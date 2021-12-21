@@ -159,7 +159,7 @@ GENERIC_COMPANY_NAME_WORDS = BASE_GENERIC_COMPANY_NAME_WORDS + \
 def smart_boolean(bool_data):
     if isinstance(bool_data, str):
         bool_data = bool_data.lower().strip()
-        return True if bool_data in ('true', 'vraie', '1') else False
+        return True if bool_data in ('true', '=true', 'vraie', '=vraie', '1') else False
     else:
         return bool(bool_data)
 
@@ -204,16 +204,7 @@ def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, c
 def hubspot_action(hc_data, cbx_data, create, subscription_update, ignore):
     if create:
         if smart_boolean(hc_data[HC_IS_TAKE_OVER]):
-            if hc_data[CBX_REGISTRATION_STATUS] == 'Suspended':
-                return 'restore_suspended'
-            elif hc_data[CBX_REGISTRATION_STATUS] == 'Active':
-                return ''
-            elif hc_data[CBX_REGISTRATION_STATUS] == 'Non Member':
-                return 'activation_link'
-            else:
-                print(f'WARNING: invalid registration status {hc_data[CBX_REGISTRATION_STATUS]}')
-                if not ignore:
-                    exit(-1)
+            return 'activation_link'
         else:
             if hc_data[HC_AMBIGUOUS]:
                 return 'ambiguous_onboarding'
