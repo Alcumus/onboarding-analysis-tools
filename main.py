@@ -470,8 +470,6 @@ if __name__ == '__main__':
             price_diff = float(hc_row[HC_BASE_SUBSCRIPTION_FEE]) - current_sub_total
             if price_diff > 0 and matches[0]['registration_status'] == 'Active' and matches[0]['expiration_date'] \
                     and current_sub_total > 0.0:
-                if smart_boolean(hc_row[HC_IS_ASSOCIATION_FEE]):
-                    price_diff += 100.0
                 subscription_upgrade = True
                 upgrade_price = price_diff
                 expiration = matches[0]['expiration_date']
@@ -483,6 +481,9 @@ if __name__ == '__main__':
                     prorated_upgrade_price = days / 365 * upgrade_price
                 else:
                     prorated_upgrade_price = upgrade_price
+                if smart_boolean(hc_row[HC_IS_ASSOCIATION_FEE]):
+                    upgrade_price += 100.0
+                    prorated_upgrade_price += 100
         else:
             hc_row.extend(['' for x in range(len(analysis_headers)-6)])
         create_in_cognibox = False if len(uniques_cbx_id) and not hc_row[HC_AMBIGUOUS] else True
