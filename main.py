@@ -325,7 +325,7 @@ if __name__ == '__main__':
         # retrieve
         if not row[0].value:
             continue
-        hc_data.append([cell.value if cell.value else '' for cell in row])
+        hc_data.append([cell.value if cell.value is not None else '' for cell in row])
     total = len(hc_data) - 1
     metadata_indexes = []
     headers = []
@@ -470,6 +470,8 @@ if __name__ == '__main__':
             price_diff = float(hc_row[HC_BASE_SUBSCRIPTION_FEE]) - current_sub_total
             if price_diff > 0 and matches[0]['registration_status'] == 'Active' and matches[0]['expiration_date'] \
                     and current_sub_total > 0.0:
+                if smart_boolean(hc_row[HC_IS_ASSOCIATION_FEE]):
+                    price_diff += 100.0
                 subscription_upgrade = True
                 upgrade_price = price_diff
                 expiration = matches[0]['expiration_date']
