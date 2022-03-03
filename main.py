@@ -366,7 +366,7 @@ if __name__ == '__main__':
                       f' {row[HC_COUNTRY]}. Expected USD')
                 if not args.ignore_warnings:
                     exit(-1)
-        row[HC_EMAIL] = row[HC_EMAIL].strip()
+        row[HC_EMAIL] = str(row[HC_EMAIL]).strip()
 
     print(f'Completed reading {len(hc_data)} contractors.')
     print(f'Starting data analysis...')
