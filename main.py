@@ -60,14 +60,12 @@ analysis_headers = ['cbx_id', 'cbx_contractor', 'cbx_street', 'cbx_city', 'cbx_s
 
 rd_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'contact_email', 'contact_phone',
               'contact_language', 'address', 'city', 'province_state_iso2', 'country_iso2',
-              'postal_code', 'category', 'description', 'phone', 'extension', 'fax', 'website', 'language',
+              'postal_code', 'description', 'phone', 'extension', 'fax', 'website', 'language',
               'qualification_expiration_date', 'qualification_status', 'contact_currency',
               'agent_in_charge_id', 'renewal_date', 'information_shared', 'contact_timezone']
 
 
 metadata_headers = ['metadata_x', 'metadata_y', 'metadata_z', '...']
-
-# todo fix the subscription price
 
 # noinspection SpellCheckingInspection
 BASE_GENERIC_DOMAIN = ['yahoo.ca', 'yahoo.com', 'hotmail.com', 'gmail.com', 'outlook.com',
@@ -368,6 +366,8 @@ if __name__ == '__main__':
                       f' {row[HC_COUNTRY]}. Expected USD')
                 if not args.ignore_warnings:
                     exit(-1)
+        row[HC_EMAIL] = row[HC_EMAIL].strip()
+
     print(f'Completed reading {len(hc_data)} contractors.')
     print(f'Starting data analysis...')
 
