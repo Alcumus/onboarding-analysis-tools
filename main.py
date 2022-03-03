@@ -8,6 +8,7 @@ from openpyxl.styles import Alignment
 from fuzzywuzzy import fuzz
 from datetime import datetime
 
+CBX_DEFAULT_STANDARD_SUBSCRIPTION = 803
 CBX_HEADER_LENGTH = 26
 # noinspection SpellCheckingInspection
 CBX_ID, CBX_COMPANY_FR, CBX_COMPANY_EN, CBX_COMPANY_OLD, CBX_ADDRESS, CBX_CITY, CBX_STATE, \
@@ -16,14 +17,14 @@ CBX_ID, CBX_COMPANY_FR, CBX_COMPANY_EN, CBX_COMPANY_OLD, CBX_ADDRESS, CBX_CITY, 
     CBX_SUB_PRICE_USD, CBX_EMPL_PRICE_USD, CBX_HIRING_CLIENT_NAMES, \
     CBX_HIRING_CLIENT_IDS, CBX_HIRING_CLIENT_QSTATUS, CBX_PARENTS = range(CBX_HEADER_LENGTH)
 
-HC_HEADER_LENGTH = 35
-HC_COMPANY, HC_FIRSTNAME, HC_LASTNAME, HC_EMAIL, HC_CONTACT_PHONE, HC_LANGUAGE, HC_STREET, HC_CITY, \
-    HC_STATE, HC_COUNTRY, HC_ZIP, HC_CATEGORY, HC_DESCRIPTION, HC_PHONE, HC_WEBSITE,\
-    HC_IS_TAKE_OVER, HC_TAKEOVER_RENEWAL_DATE, HC_TAKEOVER_QF_STATUS, \
+HC_HEADER_LENGTH = 39
+HC_COMPANY, HC_FIRSTNAME, HC_LASTNAME, HC_EMAIL, HC_CONTACT_PHONE, HC_CONTACT_LANGUAGE, HC_STREET, HC_CITY, \
+    HC_STATE, HC_COUNTRY, HC_ZIP, HC_CATEGORY, HC_DESCRIPTION, HC_PHONE, HC_EXTENSION, HC_FAX,  HC_WEBSITE,\
+    HC_LANGUAGE, HC_IS_TAKE_OVER, HC_TAKEOVER_QUALIFICATION_DATE, HC_TAKEOVER_QF_STATUS, \
     HC_PROJECT_NAME, HC_QUESTIONNAIRE_NAME, HC_QUESTIONNAIRE_ID, HC_PRICING_GROUP_ID, HC_PRICING_GROUP_CODE, \
     HC_HIRING_CLIENT_NAME, HC_HIRING_CLIENT_ID, HC_IS_ASSOCIATION_FEE, HC_BASE_SUBSCRIPTION_FEE, \
-    HC_CURRENCY, HC_AGENT_IN_CHARGE_ID, HC_TAKEOVER_FOLLOW_UP_DATE, HC_INFORMATION_SHARED, HC_TIMEZONE,\
-    HC_DO_NOT_MATCH, HC_FORCE_CBX_ID, HC_AMBIGUOUS = range(HC_HEADER_LENGTH)
+    HC_CONTACT_CURRENCY, HC_AGENT_IN_CHARGE_ID, HC_TAKEOVER_FOLLOW_UP_DATE, HC_TAKEOVER_RENEWAL_DATE, HC_INFORMATION_SHARED, \
+    HC_CONTACT_TIMEZONE, HC_DO_NOT_MATCH, HC_FORCE_CBX_ID, HC_AMBIGUOUS = range(HC_HEADER_LENGTH)
 
 SUPPORTED_CURRENCIES = ('CAD', 'USD')
 
@@ -37,16 +38,17 @@ cbx_headers = ['id', 'name_fr', 'name_en', 'old_names', 'address', 'city', 'stat
 # noinspection SpellCheckingInspection
 hc_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'contact_email', 'contact_phone',
               'contact_language', 'address', 'city', 'province_state_iso2', 'country_iso2',
-              'postal_code', 'category', 'description', 'phone', 'website',
-              'is_take_over', 'take_over_renewal_date',
-              'take_over_qualification_status', 'batch', 'questionnaire_name', 'questionnaire_id',
+              'postal_code', 'category', 'description', 'phone', 'extension', 'fax', 'website', 'language',
+              'is_take_over', 'qualification_expiration_date',
+              'qualification_status', 'batch', 'questionnaire_name', 'questionnaire_id',
               'pricing_group_id', 'pricing_group_code', 'hiring_client_name', 'hiring_client_id', 'is_association_fee',
-              'base_subscription_fee', 'currency', 'agent_in_charge_id', 'take_over_follow-up_date',
-              'information_shared', 'timezone', 'do_not_match', 'force_cbx_id', 'ambiguous']
+              'base_subscription_fee', 'contact_currency', 'agent_in_charge_id', 'take_over_follow-up_date',
+              'qualification_renewal_date', 'information_shared', 'contact_timezone', 'do_not_match',
+              'force_cbx_id', 'ambiguous']
 
 # noinspection SpellCheckingInspection
 analysis_headers = ['cbx_id', 'cbx_contractor', 'cbx_street', 'cbx_city', 'cbx_state', 'cbx_zip', 'cbx_country',
-                    'expiration_date', 'registration_status', 'suspended', 'cbx_email',
+                    'cbx_expiration_date', 'registration_status', 'suspended', 'cbx_email',
                     'cbx_first_name', 'cbx_last_name', 'modules', 'cbx_account_type',
                     'cbx_subscription_fee', 'cbx_employee_price', 'parents', 'previous',
                     'hiring_client_names', 'hiring_client_count',
@@ -178,8 +180,8 @@ def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, c
     employee_price_usd = float(cbx_row[CBX_EMPL_PRICE_USD]) if cbx_row[CBX_EMPL_PRICE_USD] else 0.0
     sub_price_cad = float(cbx_row[CBX_SUB_PRICE_CAD]) if cbx_row[CBX_SUB_PRICE_CAD] else 0.0
     employee_price_cad = float(cbx_row[CBX_EMPL_PRICE_CAD]) if cbx_row[CBX_EMPL_PRICE_CAD] else 0.0
-    if hc_row[HC_CURRENCY] not in SUPPORTED_CURRENCIES:
-        raise AssertionError(f'Invalid currency: {hc_row[HC_CURRENCY]}, must be in {SUPPORTED_CURRENCIES}')
+    if hc_row[HC_CONTACT_CURRENCY] != '' and hc_row[HC_CONTACT_CURRENCY] not in SUPPORTED_CURRENCIES:
+        raise AssertionError(f'Invalid currency: {hc_row[HC_CONTACT_CURRENCY]}, must be in {SUPPORTED_CURRENCIES}')
     for idx, val in enumerate(hiring_clients_list):
         if val == hc_row[HC_HIRING_CLIENT_NAME] and hiring_clients_qstatus[idx] == 'validated':
             is_qualified = True
@@ -191,8 +193,8 @@ def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, c
             'suspended': cbx_row[CBX_SUSPENDED], 'email': cbx_row[CBX_EMAIL], 'first_name': cbx_row[CBX_FISTNAME],
             'last_name': cbx_row[CBX_LASTNAME], 'modules': cbx_row[CBX_MODULES],
             'account_type': cbx_row[CBX_ACCOUNT_TYPE],
-            'subscription_price': sub_price_cad if hc_row[HC_CURRENCY] == "CAD" else sub_price_usd,
-            'employee_price': employee_price_cad if hc_row[HC_CURRENCY] == "CAD" else employee_price_usd,
+            'subscription_price': sub_price_cad if hc_row[HC_CONTACT_CURRENCY] == "CAD" else sub_price_usd,
+            'employee_price': employee_price_cad if hc_row[HC_CONTACT_CURRENCY] == "CAD" else employee_price_usd,
             'parents': cbx_row[CBX_PARENTS], 'previous': cbx_row[CBX_COMPANY_OLD],
             'hiring_client_names': cbx_row[CBX_HIRING_CLIENT_NAMES], 'hiring_client_count': hc_count,
             'is_in_relationship': is_in_relationship, 'is_qualified': is_qualified,
@@ -302,7 +304,7 @@ if __name__ == '__main__':
     print(f'Completed reading {len(cbx_data)} contractors.')
 
     print('Reading hiring client data file...')
-    hc_wb = openpyxl.load_workbook(hc_file, read_only=True)
+    hc_wb = openpyxl.load_workbook(hc_file, read_only=True, data_only=True)
     if args.hc_list_sheet_name:
         hc_sheet = hc_wb.get_sheet_by_name(args.hc_list_sheet_name)
     else:
@@ -346,14 +348,14 @@ if __name__ == '__main__':
     # checking currency integrity
     for row in hc_data:
         if row[HC_COUNTRY].lower().strip() == 'ca':
-            if row[HC_CURRENCY].lower().strip() != 'cad':
-                print(f'WARNING: currency and country mismatch: {row[HC_CURRENCY]} and'
+            if row[HC_CONTACT_CURRENCY].lower().strip() not in ('cad', ''):
+                print(f'WARNING: currency and country mismatch: {row[HC_CONTACT_CURRENCY]} and'
                       f' {row[HC_COUNTRY]}. Expected CAD')
                 if not args.ignore_warnings:
                     exit(-1)
         else:
-            if row[HC_CURRENCY].lower().strip() != 'usd':
-                print(f'WARNING: currency and country mismatch: {row[HC_CURRENCY]} and'
+            if row[HC_CONTACT_CURRENCY].lower().strip() not in ('usd', ''):
+                print(f'WARNING: currency and country mismatch: {row[HC_CONTACT_CURRENCY]} and'
                       f' {row[HC_COUNTRY]}. Expected USD')
                 if not args.ignore_warnings:
                     exit(-1)
@@ -466,8 +468,13 @@ if __name__ == '__main__':
             hc_row.append(len([i for i in matches if i['hiring_client_count'] > 0]))
             hc_row.append('\n'.join(ids))
             # Calculate subscription upgrade and prorating
+            if hc_row[HC_BASE_SUBSCRIPTION_FEE] == '':
+                bsf = CBX_DEFAULT_STANDARD_SUBSCRIPTION
+                print(f'WARNING: no subscription fee defined for {hc_row[HC_COMPANY]}, using default {bsf}')
+            else:
+                bsf = hc_row[HC_BASE_SUBSCRIPTION_FEE]
             current_sub_total = matches[0]['subscription_price'] + matches[0]['employee_price']
-            price_diff = float(hc_row[HC_BASE_SUBSCRIPTION_FEE]) - current_sub_total
+            price_diff = float(bsf) - current_sub_total
             if price_diff > 0 and matches[0]['registration_status'] == 'Active' and matches[0]['expiration_date'] \
                     and current_sub_total > 0.0:
                 subscription_upgrade = True
