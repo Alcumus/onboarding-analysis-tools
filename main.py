@@ -23,8 +23,9 @@ HC_COMPANY, HC_FIRSTNAME, HC_LASTNAME, HC_EMAIL, HC_CONTACT_PHONE, HC_CONTACT_LA
     HC_LANGUAGE, HC_IS_TAKE_OVER, HC_TAKEOVER_QUALIFICATION_DATE, HC_TAKEOVER_QF_STATUS, \
     HC_PROJECT_NAME, HC_QUESTIONNAIRE_NAME, HC_QUESTIONNAIRE_ID, HC_PRICING_GROUP_ID, HC_PRICING_GROUP_CODE, \
     HC_HIRING_CLIENT_NAME, HC_HIRING_CLIENT_ID, HC_IS_ASSOCIATION_FEE, HC_BASE_SUBSCRIPTION_FEE, \
-    HC_CONTACT_CURRENCY, HC_AGENT_IN_CHARGE_ID, HC_TAKEOVER_FOLLOW_UP_DATE, HC_TAKEOVER_RENEWAL_DATE, HC_INFORMATION_SHARED, \
-    HC_CONTACT_TIMEZONE, HC_DO_NOT_MATCH, HC_FORCE_CBX_ID, HC_AMBIGUOUS = range(HC_HEADER_LENGTH)
+    HC_CONTACT_CURRENCY, HC_AGENT_IN_CHARGE_ID, HC_TAKEOVER_FOLLOW_UP_DATE, HC_TAKEOVER_RENEWAL_DATE, \
+    HC_INFORMATION_SHARED, HC_CONTACT_TIMEZONE, HC_DO_NOT_MATCH, HC_FORCE_CBX_ID, HC_AMBIGUOUS \
+    = range(HC_HEADER_LENGTH)
 
 SUPPORTED_CURRENCIES = ('CAD', 'USD')
 
@@ -43,7 +44,7 @@ hc_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'con
               'qualification_status', 'batch', 'questionnaire_name', 'questionnaire_id',
               'pricing_group_id', 'pricing_group_code', 'hiring_client_name', 'hiring_client_id', 'is_association_fee',
               'base_subscription_fee', 'contact_currency', 'agent_in_charge_id', 'take_over_follow-up_date',
-              'qualification_renewal_date', 'information_shared', 'contact_timezone', 'do_not_match',
+              'renewal_date', 'information_shared', 'contact_timezone', 'do_not_match',
               'force_cbx_id', 'ambiguous']
 
 # noinspection SpellCheckingInspection
@@ -55,7 +56,14 @@ analysis_headers = ['cbx_id', 'cbx_contractor', 'cbx_street', 'cbx_city', 'cbx_s
                     'is_in_relationship', 'is_qualified', 'ratio_company', 'ratio_address',
                     'contact_match', 'generic_domain', 'match_count', 'match_count_with_hc',
                     'analysis', 'is_subscription_upgrade', 'upgrade_price', 'prorated_upgrade_price', 'create_in_cbx',
-                    'hubspot_action', 'index']
+                    'action', 'index']
+
+rd_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'contact_email', 'contact_phone',
+              'contact_language', 'address', 'city', 'province_state_iso2', 'country_iso2',
+              'postal_code', 'category', 'description', 'phone', 'extension', 'fax', 'website', 'language',
+              'qualification_expiration_date', 'qualification_status', 'contact_currency',
+              'agent_in_charge_id', 'renewal_date', 'information_shared', 'contact_timezone']
+
 
 metadata_headers = ['metadata_x', 'metadata_y', 'metadata_z', '...']
 
@@ -203,7 +211,7 @@ def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, c
 
 
 # noinspection PyShadowingNames
-def hubspot_action(hc_data, cbx_data, create, subscription_update, ignore):
+def action(hc_data, cbx_data, create, subscription_update, ignore):
     if create:
         if smart_boolean(hc_data[HC_IS_TAKE_OVER]):
             return 'activation_link'
@@ -230,7 +238,7 @@ def hubspot_action(hc_data, cbx_data, create, subscription_update, ignore):
                 if cbx_data['is_in_relationship']:
                     return ''
                 if subscription_update:
-                    return 'subscription_update'
+                    return 'subscription_upgrade'
                 elif hc_data[HC_IS_ASSOCIATION_FEE] and not cbx_data['is_in_relationship']:
                     return 'association_fee'
             elif reg_status == 'Suspended':
@@ -331,6 +339,7 @@ if __name__ == '__main__':
     total = len(hc_data) - 1
     metadata_indexes = []
     headers = []
+    rd_headers_mapping = []
     # check hc data consistency
     if hc_data and len(hc_data[0]) < len(hc_headers):
         print(f'WARNING: got {len(hc_data[0])} columns when at least {len(hc_headers)} is expected')
@@ -364,8 +373,15 @@ if __name__ == '__main__':
 
     out_wb = openpyxl.Workbook()
     out_ws = out_wb.active
-    out_ws.title = "results"
-
+    out_ws.title = 'all'
+    out_ws_onboarding = out_wb.create_sheet(title="onboarding")
+    out_ws_association_fee = out_wb.create_sheet(title="association_fee")
+    out_ws_re_onboarding = out_wb.create_sheet(title="re_onboarding")
+    out_ws_subscription_upgrade = out_wb.create_sheet(title="subscription_upgrade")
+    out_ws_ambiguous_onboarding = out_wb.create_sheet(title="ambiguous_onboarding")
+    out_ws_restore_suspended = out_wb.create_sheet(title="restore_suspended")
+    out_ws_activation_link = out_wb.create_sheet(title="activation_link")
+    out_ws_onboarding_rd = out_wb.create_sheet(title="onboarding_rd")
     # append analysis headers and move metadata headers at the end
     if not args.no_headers:
         for idx, val in enumerate(headers):
@@ -377,8 +393,22 @@ if __name__ == '__main__':
         for md_index in metadata_indexes:
             metadata_array.insert(0, headers.pop(md_index))
         headers.extend(metadata_array)
+        column = 0
         for index, value in enumerate(headers):
             out_ws.cell(1, index+1, value)
+            out_ws_onboarding.cell(1, index+1, value)
+            out_ws_association_fee.cell(1, index+1, value)
+            out_ws_re_onboarding.cell(1, index+1, value)
+            out_ws_subscription_upgrade.cell(1, index+1, value)
+            out_ws_ambiguous_onboarding.cell(1, index+1, value)
+            out_ws_restore_suspended.cell(1, index+1, value)
+            out_ws_activation_link.cell(1, index+1, value)
+            if value in rd_headers:
+                column += 1
+                rd_headers_mapping.append(True)
+                out_ws_onboarding_rd.cell(1, column, value)
+            else:
+                rd_headers_mapping.append(False)
         out_wb.save(filename=output_file)
     # match
     for index, hc_row in enumerate(hc_data):
@@ -498,8 +528,8 @@ if __name__ == '__main__':
         hc_row.append(upgrade_price)
         hc_row.append(prorated_upgrade_price)
         hc_row.append(create_in_cognibox)
-        hc_row.append(hubspot_action(hc_row, matches[0] if len(matches) else {}, create_in_cognibox,
-                                     subscription_upgrade, args.ignore_warnings))
+        hc_row.append(action(hc_row, matches[0] if len(matches) else {}, create_in_cognibox,
+                      subscription_upgrade, args.ignore_warnings))
         hc_row.append(index+1)
         metadata_array = []
         for md_index in metadata_indexes:
@@ -511,30 +541,82 @@ if __name__ == '__main__':
             out_wb.save(filename=output_file)
         print(f'{index+1} of {total} [{len(uniques_cbx_id)} found]')
 
+    out_wb.save(filename=output_file)
+
+    hc_onboarding = filter(lambda x: x[HC_HEADER_LENGTH+len(analysis_headers)-2] == 'onboarding', hc_data)
+    for index, row in enumerate(hc_onboarding):
+        for i, value in enumerate(row):
+            out_ws_onboarding.cell(index + 2, i + 1, value)
+
+    hc_association_fee = filter(lambda x: x[HC_HEADER_LENGTH+len(analysis_headers)-2] == 'association_fee', hc_data)
+    for index, row in enumerate(hc_association_fee):
+        for i, value in enumerate(row):
+            out_ws_association_fee.cell(index + 2, i + 1, value)
+
+    hc_re_onboarding = filter(lambda x: x[HC_HEADER_LENGTH+len(analysis_headers)-2] == 're_onboarding', hc_data)
+    for index, row in enumerate(hc_re_onboarding):
+        for i, value in enumerate(row):
+            out_ws_re_onboarding.cell(index + 2, i + 1, value)
+
+    hc_subscription_upgrade = filter(lambda x: x[HC_HEADER_LENGTH+len(analysis_headers)-2] == 'subscription_upgrade',
+                                     hc_data)
+    for index, row in enumerate(hc_subscription_upgrade):
+        for i, value in enumerate(row):
+            out_ws_subscription_upgrade.cell(index + 2, i + 1, value)
+
+    hc_ambiguous_onboarding = filter(lambda x: x[HC_HEADER_LENGTH+len(analysis_headers)-2] == 'ambiguous_onboarding',
+                                     hc_data)
+    for index, row in enumerate(hc_ambiguous_onboarding):
+        for i, value in enumerate(row):
+            out_ws_ambiguous_onboarding.cell(index + 2, i + 1, value)
+
+    hc_restore_suspended = filter(lambda x: x[HC_HEADER_LENGTH+len(analysis_headers)-2] == 'restore_suspended',
+                                  hc_data)
+    for index, row in enumerate(hc_restore_suspended):
+        for i, value in enumerate(row):
+            out_ws_restore_suspended.cell(index + 2, i + 1, value)
+
+    hc_activation_link = filter(lambda x: x[HC_HEADER_LENGTH+len(analysis_headers)-2] == 'activation_link',
+                                hc_data)
+    for index, row in enumerate(hc_activation_link):
+        for i, value in enumerate(row):
+            out_ws_activation_link.cell(index + 2, i + 1, value)
+
+    hc_onboarding_rd = filter(lambda x: x[HC_HEADER_LENGTH+len(analysis_headers)-2] == 'onboarding',
+                              hc_data)
+    for index, row in enumerate(hc_onboarding_rd):
+        column = 0
+        for i, value in enumerate(row):
+            if rd_headers_mapping[i]:
+                column += 1
+                out_ws_onboarding_rd.cell(index + 2, column, value)
+
     # formatting the excel...
-    tab = Table(displayName='results', ref=f'A1:{get_column_letter(len(hc_row))}{len(hc_data)+1}')
     style = TableStyleInfo(name="TableStyleMedium2", showFirstColumn=False,
                            showLastColumn=False, showRowStripes=True, showColumnStripes=False)
     dims = {}
-    for row in out_ws.rows:
-        for cell in row:
-            if cell.value:
-                dims[cell.column_letter] = max((dims.get(cell.column_letter, 0), len(str(cell.value))))
-    for col, value in dims.items():
-        out_ws.column_dimensions[col].width = value
-    out_ws.column_dimensions[get_column_letter(HC_HEADER_LENGTH+len(analysis_headers)-6)].width = 150
-    out_ws.column_dimensions[get_column_letter(HC_HEADER_LENGTH+len(analysis_headers)-16)].width = 150
-    out_ws.column_dimensions[get_column_letter(HC_HEADER_LENGTH+len(analysis_headers)-17)].width = 150
-    out_ws.column_dimensions[get_column_letter(HC_HEADER_LENGTH+len(analysis_headers)-18)].width = 150
-
-    for i in range(2, len(hc_data)+1):
-        out_ws.cell(i, HC_HEADER_LENGTH+len(analysis_headers)-6).alignment = Alignment(wrapText=True)
-        out_ws.cell(i, HC_HEADER_LENGTH+len(analysis_headers)-16).alignment = Alignment(wrapText=True)
-        out_ws.cell(i, HC_HEADER_LENGTH+len(analysis_headers)-17).alignment = Alignment(wrapText=True)
-        out_ws.cell(i, HC_HEADER_LENGTH+len(analysis_headers)-18).alignment = Alignment(wrapText=True)
-
-    tab.tableStyleInfo = style
-    out_ws.add_table(tab)
+    sheets = (out_ws, out_ws_onboarding, out_ws_association_fee, out_ws_re_onboarding, out_ws_subscription_upgrade,
+              out_ws_ambiguous_onboarding, out_ws_restore_suspended, out_ws_activation_link, out_ws_onboarding_rd)
+    for sheet in sheets:
+        tab = Table(displayName=sheet.title, ref=f'A1:{get_column_letter(sheet.max_column)}{sheet.max_row + 1}')
+        tab.tableStyleInfo = style
+        for row in sheet.rows:
+            for cell in row:
+                if cell.value:
+                    dims[cell.column_letter] = max((dims.get(cell.column_letter, 0), len(str(cell.value))))
+        for col, value in dims.items():
+            sheet.column_dimensions[col].width = value
+        if sheet != out_ws_onboarding_rd:
+            sheet.column_dimensions[get_column_letter(HC_HEADER_LENGTH+len(analysis_headers)-6)].width = 150
+            sheet.column_dimensions[get_column_letter(HC_HEADER_LENGTH+len(analysis_headers)-16)].width = 150
+            sheet.column_dimensions[get_column_letter(HC_HEADER_LENGTH+len(analysis_headers)-17)].width = 150
+            sheet.column_dimensions[get_column_letter(HC_HEADER_LENGTH+len(analysis_headers)-18)].width = 150
+            for i in range(2, len(hc_data)+1):
+                sheet.cell(i, HC_HEADER_LENGTH+len(analysis_headers)-6).alignment = Alignment(wrapText=True)
+                sheet.cell(i, HC_HEADER_LENGTH+len(analysis_headers)-16).alignment = Alignment(wrapText=True)
+                sheet.cell(i, HC_HEADER_LENGTH+len(analysis_headers)-17).alignment = Alignment(wrapText=True)
+                sheet.cell(i, HC_HEADER_LENGTH+len(analysis_headers)-18).alignment = Alignment(wrapText=True)
+        sheet.add_table(tab)
     out_wb.save(filename=output_file)
     print(f'Completed data analysis...')
     print(f'Completed at {datetime.now()}')
