@@ -2,9 +2,16 @@
 
 Tool to match contractor list provided by hiring clients to business units in CBX
 
-From Microsoft Powershell use the following (requires Docker)
+
+From Windows Powershell use the following (requires Docker)
+
+> cd <to folder where your input files iare located> 
+
 > docker run --rm -it -v ${pwd}:/home/script/data $(docker build -t icm -q https://github.com/iguzu/icm.git) <cbx_contractor_db_dump.csv> <hc_list.xlsx> <results.xlsx>
 
 To see the command line tool help use the following:
 
 > docker run --rm -it -v ${pwd}:/home/script/data $(docker build -t icm -q https://github.com/iguzu/icm.git) -h
+
+
+__** Please note that the script doesn't actually support "paths" to the input/output files since it uses a "hack" to map the files into the docker container. The file must be located where the script is located.__
