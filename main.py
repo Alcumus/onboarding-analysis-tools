@@ -381,7 +381,7 @@ if __name__ == '__main__':
     out_ws_ambiguous_onboarding = out_wb.create_sheet(title="ambiguous_onboarding")
     out_ws_restore_suspended = out_wb.create_sheet(title="restore_suspended")
     out_ws_activation_link = out_wb.create_sheet(title="activation_link")
-    out_ws_onboarding_rd = out_wb.create_sheet(title="onboarding_rd")
+    out_ws_onboarding_rd = out_wb.create_sheet(title="Data to import")
     # append analysis headers and move metadata headers at the end
     if not args.no_headers:
         for idx, val in enumerate(headers):
