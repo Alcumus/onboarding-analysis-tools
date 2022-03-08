@@ -6,7 +6,7 @@ from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment
 from fuzzywuzzy import fuzz
-from datetime import datetime
+from datetime import datetime, timedelta
 
 CBX_DEFAULT_STANDARD_SUBSCRIPTION = 803
 CBX_HEADER_LENGTH = 26
@@ -208,23 +208,35 @@ def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, c
             }
 
 
+def core_mandatory_provided(hcd):
+    mandatory_fields = (HC_COMPANY, HC_FIRSTNAME, HC_LASTNAME, HC_EMAIL, HC_CONTACT_PHONE,
+                        HC_STREET, HC_CITY, HC_STATE, HC_COUNTRY, HC_ZIP)
+    for field in mandatory_fields:
+        if hcd[field].strip() == "":
+            return False
+    return True
+
+
 # noinspection PyShadowingNames
-def action(hc_data, cbx_data, create, subscription_update, ignore):
+def action(hc_data, cbx_data, create, subscription_update, expiration_date, is_qualified, ignore):
     if create:
         if smart_boolean(hc_data[HC_IS_TAKE_OVER]):
             return 'activation_link'
         else:
-            if hc_data[HC_AMBIGUOUS]:
-                return 'ambiguous_onboarding'
+            if core_mandatory_provided(hc_data):
+                if hc_data[HC_AMBIGUOUS]:
+                    return 'ambiguous_onboarding'
+                else:
+                    return 'onboarding'
             else:
-                return 'onboarding'
+                return 'missing_info'
     else:
         reg_status = cbx_data['registration_status']
         if smart_boolean(hc_data[HC_IS_TAKE_OVER]):
             if reg_status == 'Suspended':
                 return 'restore_suspended'
             elif reg_status == 'Active':
-                return ''
+                return 'add_questionnaire'
             elif reg_status == 'Non Member':
                 return 'activation_link'
             else:
@@ -234,11 +246,26 @@ def action(hc_data, cbx_data, create, subscription_update, ignore):
         else:
             if reg_status == 'Active':
                 if cbx_data['is_in_relationship']:
-                    return ''
-                if subscription_update:
-                    return 'subscription_upgrade'
-                elif hc_data[HC_IS_ASSOCIATION_FEE] and not cbx_data['is_in_relationship']:
-                    return 'association_fee'
+                    if is_qualified:
+                        return 'do_nothing'
+                    else:
+                        return 'follow_up_qualification'
+                else:
+                    if subscription_update:
+                        return 'subscription_upgrade'
+                    elif hc_data[HC_IS_ASSOCIATION_FEE] and not cbx_data['is_in_relationship']:
+                        if expiration_date:
+                            expiration = cbx_data[CBX_EXPIRATION_DATE]
+                            expiration_date = datetime.strptime(expiration, "%d/%m/%y")
+                            in_six_weeks = datetime.now() + timedelta(weeks=6)
+                            if expiration_date > in_six_weeks:
+                                return 'association_fee'
+                            else:
+                                return 'add_questionnaire'
+                        else:
+                            return 'association_fee'
+                    else:
+                        return 'add_questionnaire'
             elif reg_status == 'Suspended':
                 return 'restore_suspended'
             elif reg_status in ('Non Member', '', None):
@@ -381,7 +408,17 @@ if __name__ == '__main__':
     out_ws_ambiguous_onboarding = out_wb.create_sheet(title="ambiguous_onboarding")
     out_ws_restore_suspended = out_wb.create_sheet(title="restore_suspended")
     out_ws_activation_link = out_wb.create_sheet(title="activation_link")
+    out_ws_do_nothing = out_wb.create_sheet(title="do_nothing")
+    out_ws_add_questionnaire = out_wb.create_sheet(title="add_questionnaire")
+    out_ws_missing_information = out_wb.create_sheet(title="missing_info")
+    out_ws_follow_up_qualification = out_wb.create_sheet(title="follow_up_qualification")
     out_ws_onboarding_rd = out_wb.create_sheet(title="Data to import")
+
+    sheets = (out_ws, out_ws_onboarding, out_ws_association_fee, out_ws_re_onboarding, out_ws_subscription_upgrade,
+              out_ws_ambiguous_onboarding, out_ws_restore_suspended, out_ws_activation_link, out_ws_do_nothing,
+              out_ws_add_questionnaire, out_ws_missing_information, out_ws_follow_up_qualification,
+              out_ws_onboarding_rd)
+
     # append analysis headers and move metadata headers at the end
     if not args.no_headers:
         for idx, val in enumerate(headers):
@@ -395,14 +432,8 @@ if __name__ == '__main__':
         headers.extend(metadata_array)
         column = 0
         for index, value in enumerate(headers):
-            out_ws.cell(1, index+1, value)
-            out_ws_onboarding.cell(1, index+1, value)
-            out_ws_association_fee.cell(1, index+1, value)
-            out_ws_re_onboarding.cell(1, index+1, value)
-            out_ws_subscription_upgrade.cell(1, index+1, value)
-            out_ws_ambiguous_onboarding.cell(1, index+1, value)
-            out_ws_restore_suspended.cell(1, index+1, value)
-            out_ws_activation_link.cell(1, index+1, value)
+            for sheet in sheets[:-1]:
+                sheet.cell(1, index+1, value)
             if value in rd_headers:
                 column += 1
                 rd_headers_mapping.append(True)
@@ -489,6 +520,7 @@ if __name__ == '__main__':
         subscription_upgrade = False
         upgrade_price = 0.00
         prorated_upgrade_price = 0.00
+        expiration_date = None
         if uniques_cbx_id:
             for key, value in matches[0].items():
                 match_data.append(value)
@@ -529,7 +561,8 @@ if __name__ == '__main__':
         hc_row.append(prorated_upgrade_price)
         hc_row.append(create_in_cognibox)
         hc_row.append(action(hc_row, matches[0] if len(matches) else {}, create_in_cognibox,
-                      subscription_upgrade, args.ignore_warnings))
+                             subscription_upgrade, expiration_date,
+                             matches[0]['is_qualified'] if len(matches) else False, args.ignore_warnings))
         hc_row.append(index+1)
         metadata_array = []
         for md_index in metadata_indexes:
@@ -582,6 +615,31 @@ if __name__ == '__main__':
         for i, value in enumerate(row):
             out_ws_activation_link.cell(index + 2, i + 1, value)
 
+    hc_do_nothing = filter(lambda x: x[HC_HEADER_LENGTH+len(analysis_headers)-2] == 'do_nothing',
+                           hc_data)
+    for index, row in enumerate(hc_do_nothing):
+        for i, value in enumerate(row):
+            out_ws_do_nothing.cell(index + 2, i + 1, value)
+
+    hc_add_questionnaire = filter(lambda x: x[HC_HEADER_LENGTH+len(analysis_headers)-2] == 'add_questionnaire',
+                                  hc_data)
+    for index, row in enumerate(hc_add_questionnaire):
+        for i, value in enumerate(row):
+            out_ws_add_questionnaire.cell(index + 2, i + 1, value)
+
+    hc_missing_information = filter(lambda x: x[HC_HEADER_LENGTH+len(analysis_headers)-2] == 'missing_info',
+                                    hc_data)
+    for index, row in enumerate(hc_missing_information):
+        for i, value in enumerate(row):
+            out_ws_missing_information.cell(index + 2, i + 1, value)
+
+    hc_follow_up_qualification = filter(lambda x: x[HC_HEADER_LENGTH+len(analysis_headers)-2] ==
+                                        'follow_up_qualification',
+                                        hc_data)
+    for index, row in enumerate(hc_follow_up_qualification):
+        for i, value in enumerate(row):
+            out_ws_follow_up_qualification.cell(index + 2, i + 1, value)
+
     hc_onboarding_rd = filter(lambda x: x[HC_HEADER_LENGTH+len(analysis_headers)-2] == 'onboarding',
                               hc_data)
     for index, row in enumerate(hc_onboarding_rd):
@@ -595,10 +653,9 @@ if __name__ == '__main__':
     style = TableStyleInfo(name="TableStyleMedium2", showFirstColumn=False,
                            showLastColumn=False, showRowStripes=True, showColumnStripes=False)
     dims = {}
-    sheets = (out_ws, out_ws_onboarding, out_ws_association_fee, out_ws_re_onboarding, out_ws_subscription_upgrade,
-              out_ws_ambiguous_onboarding, out_ws_restore_suspended, out_ws_activation_link, out_ws_onboarding_rd)
     for sheet in sheets:
-        tab = Table(displayName=sheet.title, ref=f'A1:{get_column_letter(sheet.max_column)}{sheet.max_row + 1}')
+        tab = Table(displayName=sheet.title.replace(" ", "_"),
+                    ref=f'A1:{get_column_letter(sheet.max_column)}{sheet.max_row + 1}')
         tab.tableStyleInfo = style
         for row in sheet.rows:
             for cell in row:
