@@ -18,4 +18,6 @@ __** Please note that the script doesn't actually support "paths" to the input/o
 
 
 See the analsysis procedure documentation at https://github.com/iguzu/icm/blob/master/ProcedureToProcessList.docx and the hiring client Excel input file template at https://github.com/iguzu/icm/blob/master/hring_client_input_template.xlsx.
+  
+  [Template](subpro/hring_client_input_template.xlsx)
 
