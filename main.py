@@ -192,9 +192,11 @@ def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, c
         if val == hc_row[HC_HIRING_CLIENT_NAME] and hiring_clients_qstatus[idx] == 'validated':
             is_qualified = True
             break
+    expiration_date = datetime.strptime(cbx_row[CBX_EXPIRATION_DATE],
+                                        "%d/%m/%y") if cbx_row[CBX_EXPIRATION_DATE] else None
     return {'cbx_id': int(cbx_row[CBX_ID]), 'company': cbx_company, 'address': cbx_row[CBX_ADDRESS],
             'city': cbx_row[CBX_CITY], 'state': cbx_row[CBX_STATE], 'zip': cbx_row[CBX_ZIP],
-            'country': cbx_row[CBX_COUNTRY], 'expiration_date': cbx_row[CBX_EXPIRATION_DATE],
+            'country': cbx_row[CBX_COUNTRY], 'expiration_date': expiration_date,
             'registration_status': cbx_row[CBX_REGISTRATION_STATUS],
             'suspended': cbx_row[CBX_SUSPENDED], 'email': cbx_row[CBX_EMAIL], 'first_name': cbx_row[CBX_FISTNAME],
             'last_name': cbx_row[CBX_LASTNAME], 'modules': cbx_row[CBX_MODULES],
@@ -255,8 +257,6 @@ def action(hc_data, cbx_data, create, subscription_update, expiration_date, is_q
                         return 'subscription_upgrade'
                     elif hc_data[HC_IS_ASSOCIATION_FEE] and not cbx_data['is_in_relationship']:
                         if expiration_date:
-                            expiration = cbx_data[CBX_EXPIRATION_DATE]
-                            expiration_date = datetime.strptime(expiration, "%d/%m/%y")
                             in_six_weeks = datetime.now() + timedelta(weeks=6)
                             if expiration_date > in_six_weeks:
                                 return 'association_fee'
@@ -520,7 +520,6 @@ if __name__ == '__main__':
         subscription_upgrade = False
         upgrade_price = 0.00
         prorated_upgrade_price = 0.00
-        expiration_date = None
         if uniques_cbx_id:
             for key, value in matches[0].items():
                 match_data.append(value)
@@ -541,8 +540,7 @@ if __name__ == '__main__':
                     and current_sub_total > 0.0:
                 subscription_upgrade = True
                 upgrade_price = price_diff
-                expiration = matches[0]['expiration_date']
-                expiration_date = datetime.strptime(expiration, "%d/%m/%y")
+                expiration_date = matches[0]['expiration_date']
                 now = datetime.now()
                 if expiration_date > now:
                     delta = expiration_date - now
@@ -561,7 +559,7 @@ if __name__ == '__main__':
         hc_row.append(prorated_upgrade_price)
         hc_row.append(create_in_cognibox)
         hc_row.append(action(hc_row, matches[0] if len(matches) else {}, create_in_cognibox,
-                             subscription_upgrade, expiration_date,
+                             subscription_upgrade, matches[0]['expiration_date'] if len(matches) else None,
                              matches[0]['is_qualified'] if len(matches) else False, args.ignore_warnings))
         hc_row.append(index+1)
         metadata_array = []
