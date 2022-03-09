@@ -17,5 +17,5 @@ To see the command line tool help use the following:
 __** Please note that the script doesn't actually support "paths" to the input/output files since it uses a "hack" to map the files into the docker container. The file must be located where the script is located.__
 
 
-See the analsysis procedure documentation at https://github.com/iguzu/icm/blob/master/ProcedureToProcessList.docx and the hiring client Excel input file template at https://github.com/iguzu/icm/blob/master/hring_client_input_template.xlsx.
+See the analsysis [procedure documentation](ProcedureToProcessList.docx) and the hiring client Excel input file [template](hiring_client_input_template.xlsx).
 
