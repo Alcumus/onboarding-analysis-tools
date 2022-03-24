@@ -25,7 +25,7 @@ The hardest is done...
 
 From Windows Powershell use the following (requires Docker)
 
-> cd <path to the analysis folder>
+> cd < path to the analysis folder >
 
 > docker run --rm -it -v ${pwd}:/home/script/data $(docker build -t icm -q https://github.com/iguzu/icm.git) <cbx_contractor_db_dump.csv> <hc_list.xlsx> <results.xlsx>
 
