@@ -225,11 +225,10 @@ def action(hc_data, cbx_data, create, subscription_update, expiration_date, is_q
         if smart_boolean(hc_data[HC_IS_TAKE_OVER]):
             return 'activation_link'
         else:
-            if core_mandatory_provided(hc_data):
-                if hc_data[HC_AMBIGUOUS]:
-                    return 'ambiguous_onboarding'
-                else:
-                    return 'onboarding'
+            if hc_data[HC_AMBIGUOUS]:
+                return 'ambiguous_onboarding'
+            elif core_mandatory_provided(hc_data):
+                return 'onboarding'
             else:
                 return 'missing_info'
     else:
@@ -551,6 +550,9 @@ if __name__ == '__main__':
                 if smart_boolean(hc_row[HC_IS_ASSOCIATION_FEE]):
                     upgrade_price += 100.0
                     prorated_upgrade_price += 100
+            if matches[0]['account_type'] in ('elearning', 'plan_nord', 'portail_pfr'):
+                subscription_upgrade = True
+                prorated_upgrade_price = upgrade_price = hc_row[HC_BASE_SUBSCRIPTION_FEE]
         else:
             hc_row.extend(['' for x in range(len(analysis_headers)-6)])
         create_in_cognibox = False if len(uniques_cbx_id) and not hc_row[HC_AMBIGUOUS] else True
