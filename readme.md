@@ -5,9 +5,12 @@ Tool to match contractor list provided by hiring clients to business units in CB
 ## Prerequisite
 
 1. Have Docker Desktop installed on your computer. To know that docker works, run the command "docker --version" from Windows Powershell should work and show you the installed version. (https://www.docker.com/products/docker-desktop/)
-2. Have git installed on your computer. to make sure git is installed properly run the command "git --version". (https://git-scm.com/)
 
 __** Please note that virtualization must be enabled in your BIOS, you need to have installed/enabled WSL2 and install a Linux kernel (Ex: Ubuntu 18.04) **__
+
+> See the folowing instruction for help: https://docs.docker.com/desktop/windows/install/
+
+2. Have git installed on your computer. to make sure git is installed properly run the command "git --version". (https://git-scm.com/)
 
 The hardest is done...
 
