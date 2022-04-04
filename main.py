@@ -214,7 +214,8 @@ def core_mandatory_provided(hcd):
     mandatory_fields = (HC_COMPANY, HC_FIRSTNAME, HC_LASTNAME, HC_EMAIL, HC_CONTACT_PHONE,
                         HC_STREET, HC_CITY, HC_STATE, HC_COUNTRY, HC_ZIP)
     for field in mandatory_fields:
-        if hcd[field].strip() == "":
+        f_value = hcd[field].strip() if isinstance(hcd[field], str) else hcd[field]
+        if f_value == "":
             return False
     return True
 
