@@ -379,7 +379,8 @@ if __name__ == '__main__':
             print(f'WARNING: got {len(hc_data[0])} columns when {len(hc_headers)} is exactly expected')
             if not args.ignore_warnings:
                 exit(-1)
-    # checking currency integrity
+    # checking currency integrity and strip characters from contact phone
+    translation_table = dict.fromkeys(map(ord, '+ -().'), None)
     for row in hc_data:
         if row[HC_COUNTRY].lower().strip() == 'ca':
             if row[HC_CONTACT_CURRENCY].lower().strip() not in ('cad', ''):
@@ -394,7 +395,11 @@ if __name__ == '__main__':
                 if not args.ignore_warnings:
                     exit(-1)
         row[HC_EMAIL] = str(row[HC_EMAIL]).strip()
-
+        # correct and normalize phone number
+        if isinstance(row[HC_CONTACT_PHONE], str):
+            row[HC_CONTACT_PHONE] = row[HC_CONTACT_PHONE].translate(translation_table)
+        elif isinstance(row[HC_CONTACT_PHONE], int):
+            row[HC_CONTACT_PHONE] = str(row[HC_CONTACT_PHONE])
     print(f'Completed reading {len(hc_data)} contractors.')
     print(f'Starting data analysis...')
 
