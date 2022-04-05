@@ -380,7 +380,6 @@ if __name__ == '__main__':
             if not args.ignore_warnings:
                 exit(-1)
     # checking currency integrity and strip characters from contact phone
-    translation_table = dict.fromkeys(map(ord, '+ -().'), None)
     for row in hc_data:
         if row[HC_COUNTRY].lower().strip() == 'ca':
             if row[HC_CONTACT_CURRENCY].lower().strip() not in ('cad', ''):
@@ -397,9 +396,20 @@ if __name__ == '__main__':
         row[HC_EMAIL] = str(row[HC_EMAIL]).strip()
         # correct and normalize phone number
         if isinstance(row[HC_CONTACT_PHONE], str):
-            row[HC_CONTACT_PHONE] = row[HC_CONTACT_PHONE].translate(translation_table)
+            for x in ('ext', 'x', 'poste', ',', 'p'):
+                f_index = row[HC_CONTACT_PHONE].lower().find(x)
+                if f_index >= 0:
+                    if not row[HC_EXTENSION]:
+                        row[HC_EXTENSION] = row[HC_CONTACT_PHONE][f_index + len(x):]
+                    row[HC_CONTACT_PHONE] = row[HC_CONTACT_PHONE][0:f_index]
+                    break
+            row[HC_CONTACT_PHONE] = re.sub("[^0-9]", "", row[HC_CONTACT_PHONE])
         elif isinstance(row[HC_CONTACT_PHONE], int):
             row[HC_CONTACT_PHONE] = str(row[HC_CONTACT_PHONE])
+        if row[HC_CONTACT_PHONE] and not row[HC_PHONE]:
+            row[HC_PHONE] = row[HC_CONTACT_PHONE]
+        if isinstance(row[HC_EXTENSION], str):
+            row[HC_EXTENSION] = re.sub("[^0-9]", "", row[HC_EXTENSION])
     print(f'Completed reading {len(hc_data)} contractors.')
     print(f'Starting data analysis...')
 
