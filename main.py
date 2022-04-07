@@ -249,7 +249,7 @@ def action(hc_data, cbx_data, create, subscription_update, expiration_date, is_q
             if reg_status == 'Active':
                 if cbx_data['is_in_relationship']:
                     if is_qualified:
-                        return 'do_nothing'
+                        return 'already_qualified'
                     else:
                         return 'follow_up_qualification'
                 else:
@@ -395,12 +395,12 @@ if __name__ == '__main__':
                     exit(-1)
         row[HC_EMAIL] = str(row[HC_EMAIL]).strip()
         # correct and normalize phone number
+        extension = ''
         if isinstance(row[HC_CONTACT_PHONE], str):
             for x in ('ext', 'x', 'poste', ',', 'p'):
                 f_index = row[HC_CONTACT_PHONE].lower().find(x)
                 if f_index >= 0:
-                    if not row[HC_EXTENSION]:
-                        row[HC_EXTENSION] = row[HC_CONTACT_PHONE][f_index + len(x):]
+                    extension = row[HC_CONTACT_PHONE][f_index + len(x):]
                     row[HC_CONTACT_PHONE] = row[HC_CONTACT_PHONE][0:f_index]
                     break
             row[HC_CONTACT_PHONE] = re.sub("[^0-9]", "", row[HC_CONTACT_PHONE])
@@ -408,6 +408,7 @@ if __name__ == '__main__':
             row[HC_CONTACT_PHONE] = str(row[HC_CONTACT_PHONE])
         if row[HC_CONTACT_PHONE] and not row[HC_PHONE]:
             row[HC_PHONE] = row[HC_CONTACT_PHONE]
+            row[HC_EXTENSION] = extension
         if isinstance(row[HC_EXTENSION], str):
             row[HC_EXTENSION] = re.sub("[^0-9]", "", row[HC_EXTENSION])
     print(f'Completed reading {len(hc_data)} contractors.')
@@ -423,14 +424,14 @@ if __name__ == '__main__':
     out_ws_ambiguous_onboarding = out_wb.create_sheet(title="ambiguous_onboarding")
     out_ws_restore_suspended = out_wb.create_sheet(title="restore_suspended")
     out_ws_activation_link = out_wb.create_sheet(title="activation_link")
-    out_ws_do_nothing = out_wb.create_sheet(title="do_nothing")
+    out_ws_already_qualified = out_wb.create_sheet(title="already_qualified")
     out_ws_add_questionnaire = out_wb.create_sheet(title="add_questionnaire")
     out_ws_missing_information = out_wb.create_sheet(title="missing_info")
     out_ws_follow_up_qualification = out_wb.create_sheet(title="follow_up_qualification")
     out_ws_onboarding_rd = out_wb.create_sheet(title="Data to import")
 
     sheets = (out_ws, out_ws_onboarding, out_ws_association_fee, out_ws_re_onboarding, out_ws_subscription_upgrade,
-              out_ws_ambiguous_onboarding, out_ws_restore_suspended, out_ws_activation_link, out_ws_do_nothing,
+              out_ws_ambiguous_onboarding, out_ws_restore_suspended, out_ws_activation_link, out_ws_already_qualified,
               out_ws_add_questionnaire, out_ws_missing_information, out_ws_follow_up_qualification,
               out_ws_onboarding_rd)
 
@@ -631,11 +632,11 @@ if __name__ == '__main__':
         for i, value in enumerate(row):
             out_ws_activation_link.cell(index + 2, i + 1, value)
 
-    hc_do_nothing = filter(lambda x: x[HC_HEADER_LENGTH+len(analysis_headers)-2] == 'do_nothing',
-                           hc_data)
-    for index, row in enumerate(hc_do_nothing):
+    hc_already_qualified = filter(lambda x: x[HC_HEADER_LENGTH+len(analysis_headers)-2] == 'already_qualified',
+                                  hc_data)
+    for index, row in enumerate(hc_already_qualified):
         for i, value in enumerate(row):
-            out_ws_do_nothing.cell(index + 2, i + 1, value)
+            out_ws_already_qualified.cell(index + 2, i + 1, value)
 
     hc_add_questionnaire = filter(lambda x: x[HC_HEADER_LENGTH+len(analysis_headers)-2] == 'add_questionnaire',
                                   hc_data)
