@@ -387,7 +387,7 @@ if __name__ == '__main__':
                       f' "{row[HC_COUNTRY]}". Expected CAD')
                 if not args.ignore_warnings:
                     exit(-1)
-        elif not row[HC_COUNTRY].lower().strip():
+        elif row[HC_COUNTRY].lower().strip() != '':
             if row[HC_CONTACT_CURRENCY].lower().strip() not in ('usd', ''):
                 print(f'WARNING: currency and country mismatch: {row[HC_CONTACT_CURRENCY]} and'
                       f' "{row[HC_COUNTRY]}". Expected USD')
