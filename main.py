@@ -384,13 +384,13 @@ if __name__ == '__main__':
         if row[HC_COUNTRY].lower().strip() == 'ca':
             if row[HC_CONTACT_CURRENCY].lower().strip() not in ('cad', ''):
                 print(f'WARNING: currency and country mismatch: {row[HC_CONTACT_CURRENCY]} and'
-                      f' {row[HC_COUNTRY]}. Expected CAD')
+                      f' "{row[HC_COUNTRY]}". Expected CAD')
                 if not args.ignore_warnings:
                     exit(-1)
-        else:
+        elif not row[HC_COUNTRY].lower().strip():
             if row[HC_CONTACT_CURRENCY].lower().strip() not in ('usd', ''):
                 print(f'WARNING: currency and country mismatch: {row[HC_CONTACT_CURRENCY]} and'
-                      f' {row[HC_COUNTRY]}. Expected USD')
+                      f' "{row[HC_COUNTRY]}". Expected USD')
                 if not args.ignore_warnings:
                     exit(-1)
         row[HC_EMAIL] = str(row[HC_EMAIL]).strip()
