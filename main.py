@@ -213,10 +213,18 @@ def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, c
 def core_mandatory_provided(hcd):
     mandatory_fields = (HC_COMPANY, HC_FIRSTNAME, HC_LASTNAME, HC_EMAIL, HC_CONTACT_PHONE,
                         HC_STREET, HC_CITY, HC_STATE, HC_COUNTRY, HC_ZIP)
+    country = hcd[HC_COUNTRY].strip().lower() if isinstance(hcd[HC_COUNTRY], str) else hcd[HC_COUNTRY]
     for field in mandatory_fields:
         f_value = hcd[field].strip() if isinstance(hcd[field], str) else hcd[field]
         if f_value == "":
-            return False
+            if field == HC_STATE and country not in ('ca', 'us'):
+                pass
+            elif field == HC_FIRSTNAME and hcd[HC_LASTNAME]:
+                pass
+            elif field == HC_LASTNAME and hcd[HC_FIRSTNAME]:
+                pass
+            else:
+                return False
     return True
 
 
