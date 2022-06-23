@@ -219,10 +219,6 @@ def core_mandatory_provided(hcd):
         if f_value == "":
             if field == HC_STATE and country not in ('ca', 'us'):
                 pass
-            elif field == HC_FIRSTNAME and hcd[HC_LASTNAME]:
-                pass
-            elif field == HC_LASTNAME and hcd[HC_FIRSTNAME]:
-                pass
             else:
                 return False
     return True
