@@ -431,9 +431,9 @@ if __name__ == '__main__':
             row[HC_EXTENSION] = extension
         if isinstance(row[HC_EXTENSION], str):
             row[HC_EXTENSION] = re.sub("[^0-9]", "", row[HC_EXTENSION])
-        # make language, currency, state ISO2 and country ISO2 upper case
-        row[HC_LANGUAGE] = row[HC_LANGUAGE].upper()
-        row[HC_CONTACT_LANGUAGE] = row[HC_CONTACT_LANGUAGE].upper()
+        # make language lower case; currency, state ISO2 and country ISO2 upper case
+        row[HC_LANGUAGE] = row[HC_LANGUAGE].lower()
+        row[HC_CONTACT_LANGUAGE] = row[HC_CONTACT_LANGUAGE].lower()
         row[HC_COUNTRY] =  row[HC_COUNTRY].upper()
         row[HC_STATE] = row[HC_STATE].upper()
         row[HC_CONTACT_CURRENCY] = row[HC_CONTACT_CURRENCY].upper()
