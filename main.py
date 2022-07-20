@@ -62,7 +62,22 @@ rd_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'con
               'contact_language', 'address', 'city', 'province_state_iso2', 'country_iso2',
               'postal_code', 'description', 'phone', 'extension', 'fax', 'website', 'language',
               'qualification_expiration_date', 'qualification_status', 'contact_currency',
-              'agent_in_charge_id', 'renewal_date', 'information_shared', 'contact_timezone']
+              'agent_in_charge_id', 'renewal_date', 'information_shared', 'contact_timezone', 'questionnaire_name',
+              'pricing_group_code']
+
+
+hs_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'contact_email', 'contact_phone',
+              'contact_language', 'address', 'city', 'province_state_iso2', 'country_iso2',
+              'postal_code', 'description', 'phone', 'extension', 'fax', 'website', 'language',
+              'qualification_expiration_date', 'qualification_status', 'contact_currency',
+              'agent_in_charge_id', 'renewal_date', 'information_shared', 'contact_timezone', 'questionnaire_name',
+              'pricing_group_code']
+
+
+hs_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'contact_email', 'contact_phone',
+              'contact_language', 'address', 'city', 'province_state_iso2', 'country_iso2',
+              'postal_code', 'cbx_id', 'cbx_expiration_date', 'questionnaire_name',
+              'questionnaire_id', 'hiring_client_name', 'hiring_client_id', 'action' ]
 
 
 metadata_headers = ['metadata_x', 'metadata_y', 'metadata_z', '...']
@@ -369,6 +384,7 @@ if __name__ == '__main__':
     metadata_indexes = []
     headers = []
     rd_headers_mapping = []
+    hs_headers_mapping = []
     # check hc data consistency
     if hc_data and len(hc_data[0]) < len(hc_headers):
         print(f'WARNING: got {len(hc_data[0])} columns when at least {len(hc_headers)} is expected')
@@ -415,6 +431,12 @@ if __name__ == '__main__':
             row[HC_EXTENSION] = extension
         if isinstance(row[HC_EXTENSION], str):
             row[HC_EXTENSION] = re.sub("[^0-9]", "", row[HC_EXTENSION])
+        # make language, currency, state ISO2 and country ISO2 upper case
+        row[HC_LANGUAGE] = row[HC_LANGUAGE].upper()
+        row[HC_CONTACT_LANGUAGE] = row[HC_CONTACT_LANGUAGE].upper()
+        row[HC_COUNTRY] =  row[HC_COUNTRY].upper()
+        row[HC_STATE] = row[HC_STATE].upper()
+        row[HC_CONTACT_CURRENCY] = row[HC_CONTACT_CURRENCY].upper()
     print(f'Completed reading {len(hc_data)} contractors.')
     print(f'Starting data analysis...')
 
@@ -433,11 +455,12 @@ if __name__ == '__main__':
     out_ws_missing_information = out_wb.create_sheet(title="missing_info")
     out_ws_follow_up_qualification = out_wb.create_sheet(title="follow_up_qualification")
     out_ws_onboarding_rd = out_wb.create_sheet(title="Data to import")
+    out_ws_onboarding_hs = out_wb.create_sheet(title="Data for HS")
 
     sheets = (out_ws, out_ws_onboarding, out_ws_association_fee, out_ws_re_onboarding, out_ws_subscription_upgrade,
               out_ws_ambiguous_onboarding, out_ws_restore_suspended, out_ws_activation_link, out_ws_already_qualified,
               out_ws_add_questionnaire, out_ws_missing_information, out_ws_follow_up_qualification,
-              out_ws_onboarding_rd)
+              out_ws_onboarding_rd, out_ws_onboarding_hs)
 
     # append analysis headers and move metadata headers at the end
     if not args.no_headers:
@@ -450,16 +473,24 @@ if __name__ == '__main__':
         for md_index in metadata_indexes:
             metadata_array.insert(0, headers.pop(md_index))
         headers.extend(metadata_array)
-        column = 0
+        hs_headers.extend(metadata_array) # hubspot headers must includes metadata if present
+        column_rd = column_hs = 0
         for index, value in enumerate(headers):
-            for sheet in sheets[:-1]:
+            # skip the last two sheets since they have special mapping handled below
+            for sheet in sheets[:-2]:
                 sheet.cell(1, index+1, value)
             if value in rd_headers:
-                column += 1
+                column_rd += 1
                 rd_headers_mapping.append(True)
-                out_ws_onboarding_rd.cell(1, column, value)
+                out_ws_onboarding_rd.cell(1, column_rd, value)
             else:
                 rd_headers_mapping.append(False)
+            if value in hs_headers:
+                column_hs += 1
+                hs_headers_mapping.append(True)
+                out_ws_onboarding_hs.cell(1, column_hs, value)
+            else:
+                hs_headers_mapping.append(False)
         out_wb.save(filename=output_file)
     # match
     for index, hc_row in enumerate(hc_data):
@@ -531,7 +562,8 @@ if __name__ == '__main__':
         matches = sorted(matches, key=lambda x: (x['hiring_client_count'], x["ratio_address"], x["ratio_company"]),
                          reverse=True)
         for item in matches[0:10]:
-            ids.append(f'{item["cbx_id"]}, {item["company"]}, {item["address"]}, {item["zip"]}, {item["email"]}'
+            ids.append(f'{item["cbx_id"]}, {item["company"]}, {item["address"]}, {item["city"]}, {item["state"]} '
+                       f'{item["country"]} {item["zip"]}, {item["email"]}'
                        f' --> CR{item["ratio_company"]}, AR{item["ratio_address"]},'
                        f' CM{item["contact_match"]}, HCC{item["hiring_client_count"]}')
         # append matching results to the hc_list
@@ -669,6 +701,16 @@ if __name__ == '__main__':
             if rd_headers_mapping[i]:
                 column += 1
                 out_ws_onboarding_rd.cell(index + 2, column, value)
+
+
+    for index, row in enumerate(hc_data):
+        column = 0
+        for i, value in enumerate(row):
+            if hs_headers_mapping[i]:
+                column += 1
+                out_ws_onboarding_hs.cell(index + 2, column, value)
+
+
 
     # formatting the excel...
     style = TableStyleInfo(name="TableStyleMedium2", showFirstColumn=False,
