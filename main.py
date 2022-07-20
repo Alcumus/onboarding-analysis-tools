@@ -65,19 +65,10 @@ rd_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'con
               'agent_in_charge_id', 'renewal_date', 'information_shared', 'contact_timezone', 'questionnaire_name',
               'pricing_group_code']
 
-
-hs_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'contact_email', 'contact_phone',
-              'contact_language', 'address', 'city', 'province_state_iso2', 'country_iso2',
-              'postal_code', 'description', 'phone', 'extension', 'fax', 'website', 'language',
-              'qualification_expiration_date', 'qualification_status', 'contact_currency',
-              'agent_in_charge_id', 'renewal_date', 'information_shared', 'contact_timezone', 'questionnaire_name',
-              'pricing_group_code']
-
-
 hs_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'contact_email', 'contact_phone',
               'contact_language', 'address', 'city', 'province_state_iso2', 'country_iso2',
               'postal_code', 'cbx_id', 'cbx_expiration_date', 'questionnaire_name',
-              'questionnaire_id', 'hiring_client_name', 'hiring_client_id', 'action' ]
+              'questionnaire_id', 'hiring_client_name', 'hiring_client_id', 'action']
 
 
 metadata_headers = ['metadata_x', 'metadata_y', 'metadata_z', '...']
@@ -434,7 +425,7 @@ if __name__ == '__main__':
         # make language lower case; currency, state ISO2 and country ISO2 upper case
         row[HC_LANGUAGE] = row[HC_LANGUAGE].lower()
         row[HC_CONTACT_LANGUAGE] = row[HC_CONTACT_LANGUAGE].lower()
-        row[HC_COUNTRY] =  row[HC_COUNTRY].upper()
+        row[HC_COUNTRY] = row[HC_COUNTRY].upper()
         row[HC_STATE] = row[HC_STATE].upper()
         row[HC_CONTACT_CURRENCY] = row[HC_CONTACT_CURRENCY].upper()
     print(f'Completed reading {len(hc_data)} contractors.')
@@ -473,7 +464,7 @@ if __name__ == '__main__':
         for md_index in metadata_indexes:
             metadata_array.insert(0, headers.pop(md_index))
         headers.extend(metadata_array)
-        hs_headers.extend(metadata_array) # hubspot headers must includes metadata if present
+        hs_headers.extend(metadata_array)  # hubspot headers must includes metadata if present
         column_rd = column_hs = 0
         for index, value in enumerate(headers):
             # skip the last two sheets since they have special mapping handled below
@@ -702,15 +693,12 @@ if __name__ == '__main__':
                 column += 1
                 out_ws_onboarding_rd.cell(index + 2, column, value)
 
-
     for index, row in enumerate(hc_data):
         column = 0
         for i, value in enumerate(row):
             if hs_headers_mapping[i]:
                 column += 1
                 out_ws_onboarding_hs.cell(index + 2, column, value)
-
-
 
     # formatting the excel...
     style = TableStyleInfo(name="TableStyleMedium2", showFirstColumn=False,
