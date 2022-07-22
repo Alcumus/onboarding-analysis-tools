@@ -198,8 +198,13 @@ def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, c
         if val == hc_row[HC_HIRING_CLIENT_NAME] and hiring_clients_qstatus[idx] == 'validated':
             is_qualified = True
             break
-    expiration_date = datetime.strptime(cbx_row[CBX_EXPIRATION_DATE],
+    try:
+        expiration_date = datetime.strptime(cbx_row[CBX_EXPIRATION_DATE],
                                         "%d/%m/%y") if cbx_row[CBX_EXPIRATION_DATE] else None
+    except ValueError:
+        expiration_date = datetime.strptime(cbx_row[CBX_EXPIRATION_DATE],
+                                        "%d/%m/%Y") if cbx_row[CBX_EXPIRATION_DATE] else None
+
     return {'cbx_id': int(cbx_row[CBX_ID]), 'company': cbx_company, 'address': cbx_row[CBX_ADDRESS],
             'city': cbx_row[CBX_CITY], 'state': cbx_row[CBX_STATE], 'zip': cbx_row[CBX_ZIP],
             'country': cbx_row[CBX_COUNTRY], 'expiration_date': expiration_date,
