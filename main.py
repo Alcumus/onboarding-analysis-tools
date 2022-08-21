@@ -599,7 +599,7 @@ if __name__ == '__main__':
                 if smart_boolean(hc_row[HC_IS_ASSOCIATION_FEE]):
                     upgrade_price += 100.0
                     prorated_upgrade_price += 100
-            if matches[0]['account_type'] in ('elearning', 'plan_nord', 'portail_pfr'):
+            if matches[0]['account_type'] in ('elearning', 'plan_nord', 'portail_pfr', 'special'):
                 subscription_upgrade = True
                 prorated_upgrade_price = upgrade_price = hc_row[HC_BASE_SUBSCRIPTION_FEE]
         else:
