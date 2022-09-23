@@ -14,6 +14,9 @@ __** Please note that virtualization must be enabled in your BIOS, you need to h
 
 The hardest is done...
 
+3. Create a github account (free) https://github.com/signup and ask R&D to give you access to the repository
+4. create a personal token that you will use to access the repository https://github.com/settings/tokens and name it docker access (store your token securly)
+
 ## Work to do in preparation to the analysis
 
 1. Create a folder (let's say on your Desktop) where you will do your analysis (With Windows Explorer)
@@ -29,12 +32,13 @@ The hardest is done...
 From Windows Powershell use the following (requires Docker)
 
 > cd < path to the analysis folder >
+> $env:token = '<your personal github token to access the repository>'
 
-> docker run --rm -it -v ${pwd}:/home/script/data $(docker build -t icm -q https://github.com/cognibox/icm.git) <cbx_contractor_db_dump.csv> <hc_list.xlsx> <results.xlsx>
+> docker run --rm -it -v ${pwd}:/home/script/data $(docker build -t icm -q https://${env:token}:@github.com/cognibox/icm.git) <cbx_contractor_db_dump.csv> <hc_list.xlsx> <results.xlsx>
 
 To see the command line tool help use the following:
 
-> docker run --rm -it -v  ${pwd}:/home/script/data $(docker build -t icm -q https://github.com/cognibox/icm.git) -h
+> docker run --rm -it -v  ${pwd}:/home/script/data $(docker build -t icm -q https://${env:token}:@github.com/cognibox/icm.git) -h
 
 
 __** Please note that the script doesn't actually support "paths" to the input/output files since it uses a "hack" to map the files into the docker container. Only use filename and make sure they are located where the script is ran from.__
