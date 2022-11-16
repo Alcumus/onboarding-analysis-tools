@@ -30,7 +30,7 @@ The hardest is done...
 ## Do the analysis
 
 From Windows Powershell use the following (requires Docker)
-```
+```bash
 cd < path to the analysis folder >
 
 $env:token = '<your personal github token to access the repository>'
@@ -40,7 +40,7 @@ docker run --rm -it -v ${pwd}:/home/script/data $(docker build -t icm -q https:/
 
 To see the command line tool help use the following:
 
-```
+```bash
 docker run --rm -it -v  ${pwd}:/home/script/data $(docker build -t icm -q https://${env:token}:@github.com/cognibox/icm.git) -h
 ```
 
