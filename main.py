@@ -62,8 +62,8 @@ rd_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'con
               'contact_language', 'address', 'city', 'province_state_iso2', 'country_iso2',
               'postal_code', 'description', 'phone', 'extension', 'fax', 'website', 'language',
               'qualification_expiration_date', 'qualification_status', 'contact_currency',
-              'agent_in_charge_id', 'renewal_date', 'information_shared', 'contact_timezone', 'questionnaire_name',
-              'pricing_group_code']
+              'agent_in_charge_id', 'renewal_date', 'information_shared', 'contact_timezone', 'questionnaire_name', 'questionnaire_code',
+              'pricing_group_code', 'pricing_group_id', 'hiring_client_id']
 
 hs_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'contact_email', 'contact_phone',
               'contact_language', 'address', 'city', 'province_state_iso2', 'country_iso2',
