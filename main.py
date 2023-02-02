@@ -29,6 +29,10 @@ HC_COMPANY, HC_FIRSTNAME, HC_LASTNAME, HC_EMAIL, HC_CONTACT_PHONE, HC_CONTACT_LA
 
 SUPPORTED_CURRENCIES = ('CAD', 'USD')
 
+# Used in order to switch code and id in data to import
+rd_pricing_group_id_col = -1
+rd_pricing_group_code_col = -1
+
 # noinspection SpellCheckingInspection
 cbx_headers = ['id', 'name_fr', 'name_en', 'old_names', 'address', 'city', 'state', 'country', 'postal_code',
                'first_name', 'last_name', 'email', 'cbx_expiration_date', 'registration_code', 'suspended',
@@ -479,7 +483,21 @@ if __name__ == '__main__':
             if rd_headers_for_value:
                 column_rd += 1
                 rd_headers_mapping.append(True)
-                out_ws_onboarding_rd.cell(1, column_rd, rd_headers_for_value[0])
+
+                # Invert code and id columns
+                if value == "pricing_group_id":
+                    adjustement = 1
+                    rd_pricing_group_id_col = column_rd
+                elif value == "pricing_group_code":
+                    adjustement = -1
+                    rd_pricing_group_code_col = column_rd
+                else:
+                    adjustement = 0
+
+                if value in rd_headers:
+                    out_ws_onboarding_rd.cell(1, column_rd + adjustement, value)
+                else:
+                    out_ws_onboarding_rd.cell(1, column_rd, rd_headers_for_value[0])
             else:
                 rd_headers_mapping.append(False)
             if value in hs_headers:
@@ -697,7 +715,17 @@ if __name__ == '__main__':
         for i, value in enumerate(row):
             if rd_headers_mapping[i]:
                 column += 1
-                out_ws_onboarding_rd.cell(index + 2, column, value)
+                # Invert code and id columns
+                if column == rd_pricing_group_id_col:
+                    print(rd_pricing_group_id_col)
+                    print(value)
+                    out_ws_onboarding_rd.cell(index + 2, column + 1, value)
+                elif column == rd_pricing_group_code_col:
+                    print(rd_pricing_group_code_col)
+                    print(value)
+                    out_ws_onboarding_rd.cell(index + 2, column - 1, value)
+                else:
+                    out_ws_onboarding_rd.cell(index + 2, column, value)
 
     for index, row in enumerate(hc_data):
         column = 0
