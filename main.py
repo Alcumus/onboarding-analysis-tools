@@ -717,12 +717,8 @@ if __name__ == '__main__':
                 column += 1
                 # Invert code and id columns
                 if column == rd_pricing_group_id_col:
-                    print(rd_pricing_group_id_col)
-                    print(value)
                     out_ws_onboarding_rd.cell(index + 2, column + 1, value)
                 elif column == rd_pricing_group_code_col:
-                    print(rd_pricing_group_code_col)
-                    print(value)
                     out_ws_onboarding_rd.cell(index + 2, column - 1, value)
                 else:
                     out_ws_onboarding_rd.cell(index + 2, column, value)
