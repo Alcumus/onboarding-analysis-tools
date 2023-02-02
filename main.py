@@ -62,7 +62,7 @@ rd_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'con
               'contact_language', 'address', 'city', 'province_state_iso2', 'country_iso2',
               'postal_code', 'description', 'phone', 'extension', 'fax', 'website', 'language',
               'qualification_expiration_date', 'qualification_status', 'contact_currency',
-              'agent_in_charge_id', 'renewal_date', 'information_shared', 'contact_timezone', 'questionnaire_name', 'questionnaire_code',
+              'agent_in_charge_id', 'renewal_date', 'information_shared', 'contact_timezone', 'questionnaire_name', 'questionnaire_ids',
               'pricing_group_code', 'pricing_group_id', 'hiring_client_id']
 
 hs_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'contact_email', 'contact_phone',
@@ -475,10 +475,11 @@ if __name__ == '__main__':
             # skip the last two sheets since they have special mapping handled below
             for sheet in sheets[:-2]:
                 sheet.cell(1, index+1, value)
-            if value in rd_headers:
+            rd_headers_for_value = [s for s in rd_headers if value in s]
+            if rd_headers_for_value:
                 column_rd += 1
                 rd_headers_mapping.append(True)
-                out_ws_onboarding_rd.cell(1, column_rd, value)
+                out_ws_onboarding_rd.cell(1, column_rd, rd_headers_for_value[0])
             else:
                 rd_headers_mapping.append(False)
             if value in hs_headers:
