@@ -17,14 +17,15 @@ CBX_ID, CBX_COMPANY_FR, CBX_COMPANY_EN, CBX_COMPANY_OLD, CBX_ADDRESS, CBX_CITY, 
     CBX_SUB_PRICE_USD, CBX_EMPL_PRICE_USD, CBX_HIRING_CLIENT_NAMES, \
     CBX_HIRING_CLIENT_IDS, CBX_HIRING_CLIENT_QSTATUS, CBX_PARENTS = range(CBX_HEADER_LENGTH)
 
-HC_HEADER_LENGTH = 39
+HC_HEADER_LENGTH = 41
 HC_COMPANY, HC_FIRSTNAME, HC_LASTNAME, HC_EMAIL, HC_CONTACT_PHONE, HC_CONTACT_LANGUAGE, HC_STREET, HC_CITY, \
     HC_STATE, HC_COUNTRY, HC_ZIP, HC_CATEGORY, HC_DESCRIPTION, HC_PHONE, HC_EXTENSION, HC_FAX,  HC_WEBSITE,\
     HC_LANGUAGE, HC_IS_TAKE_OVER, HC_TAKEOVER_QUALIFICATION_DATE, HC_TAKEOVER_QF_STATUS, \
     HC_PROJECT_NAME, HC_QUESTIONNAIRE_NAME, HC_QUESTIONNAIRE_ID, HC_PRICING_GROUP_ID, HC_PRICING_GROUP_CODE, \
     HC_HIRING_CLIENT_NAME, HC_HIRING_CLIENT_ID, HC_IS_ASSOCIATION_FEE, HC_BASE_SUBSCRIPTION_FEE, \
     HC_CONTACT_CURRENCY, HC_AGENT_IN_CHARGE_ID, HC_TAKEOVER_FOLLOW_UP_DATE, HC_TAKEOVER_RENEWAL_DATE, \
-    HC_INFORMATION_SHARED, HC_CONTACT_TIMEZONE, HC_DO_NOT_MATCH, HC_FORCE_CBX_ID, HC_AMBIGUOUS \
+    HC_INFORMATION_SHARED, HC_CONTACT_TIMEZONE, HC_DO_NOT_MATCH, HC_FORCE_CBX_ID, HC_AMBIGUOUS, \
+    HC_CONTRACTORCHECK_ACCOUNT, HC_ASSESSMENT_LEVEL \
     = range(HC_HEADER_LENGTH)
 
 SUPPORTED_CURRENCIES = ('CAD', 'USD')
@@ -45,7 +46,7 @@ hc_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'con
               'pricing_group_id', 'pricing_group_code', 'hiring_client_name', 'hiring_client_id', 'is_association_fee',
               'base_subscription_fee', 'contact_currency', 'agent_in_charge_id', 'take_over_follow-up_date',
               'renewal_date', 'information_shared', 'contact_timezone', 'do_not_match',
-              'force_cbx_id', 'ambiguous']
+              'force_cbx_id', 'ambiguous', 'contractorcheck_account', 'assessment_level']
 
 # noinspection SpellCheckingInspection
 analysis_headers = ['cbx_id', 'cbx_contractor', 'cbx_street', 'cbx_city', 'cbx_state', 'cbx_zip', 'cbx_country',
