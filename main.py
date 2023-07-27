@@ -29,6 +29,10 @@ HC_COMPANY, HC_FIRSTNAME, HC_LASTNAME, HC_EMAIL, HC_CONTACT_PHONE, HC_CONTACT_LA
 
 SUPPORTED_CURRENCIES = ('CAD', 'USD')
 
+# Used in order to switch code and id in data to import
+rd_pricing_group_id_col = -1
+rd_pricing_group_code_col = -1
+
 # noinspection SpellCheckingInspection
 cbx_headers = ['id', 'name_fr', 'name_en', 'old_names', 'address', 'city', 'state', 'country', 'postal_code',
                'first_name', 'last_name', 'email', 'cbx_expiration_date', 'registration_code', 'suspended',
@@ -62,8 +66,8 @@ rd_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'con
               'contact_language', 'address', 'city', 'province_state_iso2', 'country_iso2',
               'postal_code', 'description', 'phone', 'extension', 'fax', 'website', 'language',
               'qualification_expiration_date', 'qualification_status', 'contact_currency',
-              'agent_in_charge_id', 'renewal_date', 'information_shared', 'contact_timezone', 'questionnaire_name',
-              'pricing_group_code']
+              'agent_in_charge_id', 'renewal_date', 'information_shared', 'contact_timezone', 'questionnaire_name', 'questionnaire_ids',
+              'pricing_group_code', 'pricing_group_id', 'hiring_client_id']
 
 hs_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'contact_email', 'contact_phone',
               'contact_language', 'address', 'city', 'province_state_iso2', 'country_iso2',
@@ -475,10 +479,25 @@ if __name__ == '__main__':
             # skip the last two sheets since they have special mapping handled below
             for sheet in sheets[:-2]:
                 sheet.cell(1, index+1, value)
-            if value in rd_headers:
+            rd_headers_for_value = [s for s in rd_headers if value in s]
+            if rd_headers_for_value:
                 column_rd += 1
                 rd_headers_mapping.append(True)
-                out_ws_onboarding_rd.cell(1, column_rd, value)
+
+                # Invert code and id columns
+                if value == "pricing_group_id":
+                    adjustement = 1
+                    rd_pricing_group_id_col = column_rd
+                elif value == "pricing_group_code":
+                    adjustement = -1
+                    rd_pricing_group_code_col = column_rd
+                else:
+                    adjustement = 0
+
+                if value in rd_headers:
+                    out_ws_onboarding_rd.cell(1, column_rd + adjustement, value)
+                else:
+                    out_ws_onboarding_rd.cell(1, column_rd, rd_headers_for_value[0])
             else:
                 rd_headers_mapping.append(False)
             if value in hs_headers:
@@ -696,7 +715,13 @@ if __name__ == '__main__':
         for i, value in enumerate(row):
             if rd_headers_mapping[i]:
                 column += 1
-                out_ws_onboarding_rd.cell(index + 2, column, value)
+                # Invert code and id columns
+                if column == rd_pricing_group_id_col:
+                    out_ws_onboarding_rd.cell(index + 2, column + 1, value)
+                elif column == rd_pricing_group_code_col:
+                    out_ws_onboarding_rd.cell(index + 2, column - 1, value)
+                else:
+                    out_ws_onboarding_rd.cell(index + 2, column, value)
 
     for index, row in enumerate(hc_data):
         column = 0
