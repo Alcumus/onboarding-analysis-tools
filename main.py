@@ -7,7 +7,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment
 from fuzzywuzzy import fuzz
 from datetime import datetime, timedelta
-from convertTimeZone import convert
+from convertTimeZone import convertFromIANATimezone
 
 CBX_DEFAULT_STANDARD_SUBSCRIPTION = 803
 CBX_HEADER_LENGTH = 26
@@ -440,7 +440,7 @@ if __name__ == '__main__':
         row[HC_STATE] = row[HC_STATE].upper()
         row[HC_CONTACT_CURRENCY] = row[HC_CONTACT_CURRENCY].upper()
         # convert date-time to windows format
-        row[HC_CONTACT_TIMEZONE] = convert(row[HC_CONTACT_TIMEZONE])
+        row[HC_CONTACT_TIMEZONE] = convertFromIANATimezone(row[HC_CONTACT_TIMEZONE])
     print(f'Completed reading {len(hc_data)} contractors.')
     print(f'Starting data analysis...')
 

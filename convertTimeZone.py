@@ -571,7 +571,7 @@ TZ_WIN = {
     "Zulu": "UTC",
 }
 
-def convert(timeZoneName):
+def convertFromIANATimezone(timeZoneName):
     if(TZ_WIN.__contains__(timeZoneName)):
         return TZ_WIN[timeZoneName]
     else:
