@@ -184,7 +184,7 @@ timezones = {
 
 
 def convertFromIANATimezone(timeZoneName):
-    if(TZ_WIN.__contains__(timeZoneName)):
-        return TZ_WIN[timeZoneName]
+    if(timezones.__contains__(timeZoneName)):
+        return timezones[timeZoneName]
     else:
         return timeZoneName
