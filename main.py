@@ -7,6 +7,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment
 from fuzzywuzzy import fuzz
 from datetime import datetime, timedelta
+from convertTimeZone import convert
 
 CBX_DEFAULT_STANDARD_SUBSCRIPTION = 803
 CBX_HEADER_LENGTH = 26
@@ -405,13 +406,13 @@ if __name__ == '__main__':
         if row[HC_COUNTRY].lower().strip() == 'ca':
             if row[HC_CONTACT_CURRENCY].lower().strip() not in ('cad', ''):
                 print(f'WARNING: currency and country mismatch: {row[HC_CONTACT_CURRENCY]} and'
-                      f' "{row[HC_COUNTRY]}". Expected CAD')
+                      f' "{row[HC_COUNTRY]}". Expected CAD in row {row}')
                 if not args.ignore_warnings:
                     exit(-1)
         elif row[HC_COUNTRY].lower().strip() != '':
             if row[HC_CONTACT_CURRENCY].lower().strip() not in ('usd', ''):
                 print(f'WARNING: currency and country mismatch: {row[HC_CONTACT_CURRENCY]} and'
-                      f' "{row[HC_COUNTRY]}". Expected USD')
+                      f' "{row[HC_COUNTRY]}". Expected USD in row {row}')
                 if not args.ignore_warnings:
                     exit(-1)
         row[HC_EMAIL] = str(row[HC_EMAIL]).strip()
@@ -438,6 +439,8 @@ if __name__ == '__main__':
         row[HC_COUNTRY] = row[HC_COUNTRY].upper()
         row[HC_STATE] = row[HC_STATE].upper()
         row[HC_CONTACT_CURRENCY] = row[HC_CONTACT_CURRENCY].upper()
+        # convert date-time to windows format
+        row[HC_CONTACT_TIMEZONE] = convert(row[HC_CONTACT_TIMEZONE])
     print(f'Completed reading {len(hc_data)} contractors.')
     print(f'Starting data analysis...')
 
