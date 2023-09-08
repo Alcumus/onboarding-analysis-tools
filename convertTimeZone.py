@@ -177,7 +177,12 @@ timezones = {
     "Asia/Anadyr": "Anadyr",
     "Pacific/Auckland": "Auckland",
     "Pacific/Fiji": "Fiji",
-    "Pacific/Tongatapu": "Nuku'alofa"
+    "Pacific/Tongatapu": "Nuku'alofa",
+    "Pacific/Pitcairn": "Pitcairn",
+    "America/El_Salvador": "Central Time (US & Canada)",
+    "America/Whitehorse": "Whitehorse",
+    "Atlantic/Bermuda": "Bermuda",
+    "America/Creston": "Pacific Time (US & Canada)"
 }
 
 # Note: Some timezones serve multiple locations, hence there might be some cities not represented due to duplicate values.
