@@ -7,6 +7,7 @@ from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment
 from fuzzywuzzy import fuzz
 from datetime import datetime, timedelta
+from convertTimeZone import convertFromIANATimezone
 
 CBX_DEFAULT_STANDARD_SUBSCRIPTION = 803
 CBX_HEADER_LENGTH = 26
@@ -29,6 +30,10 @@ HC_COMPANY, HC_FIRSTNAME, HC_LASTNAME, HC_EMAIL, HC_CONTACT_PHONE, HC_CONTACT_LA
     = range(HC_HEADER_LENGTH)
 
 SUPPORTED_CURRENCIES = ('CAD', 'USD')
+
+# Used in order to switch code and id in data to import
+rd_pricing_group_id_col = -1
+rd_pricing_group_code_col = -1
 
 # noinspection SpellCheckingInspection
 cbx_headers = ['id', 'name_fr', 'name_en', 'old_names', 'address', 'city', 'state', 'country', 'postal_code',
@@ -63,8 +68,11 @@ rd_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'con
               'contact_language', 'address', 'city', 'province_state_iso2', 'country_iso2',
               'postal_code', 'description', 'phone', 'extension', 'fax', 'website', 'language',
               'qualification_expiration_date', 'qualification_status', 'contact_currency',
-              'agent_in_charge_id', 'renewal_date', 'information_shared', 'contact_timezone', 'questionnaire_name',
-              'pricing_group_code']
+              'agent_in_charge_id', 'renewal_date', 'information_shared', 'contact_timezone', 'questionnaire_name', 'questionnaire_ids',
+              'pricing_group_code', 'pricing_group_id', 'hiring_client_id', 'contractorcheck_account', 'assessment_level']
+
+existing_contractors_headers = ['cbx_id']
+existing_contractors_headers.extend(rd_headers.copy())
 
 hs_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'contact_email', 'contact_phone',
               'contact_language', 'address', 'city', 'province_state_iso2', 'country_iso2',
@@ -100,6 +108,7 @@ hc_headers_with_metadata.extend(metadata_headers)
 cbx_headers_text = '\n'.join([', '.join(x) for x in list(chunks(cbx_headers, 5))])
 hc_headers_text = '\n'.join([', '.join(x) for x in list(chunks(hc_headers_with_metadata, 5))])
 analysis_headers_text = '\n'.join([', '.join(x) for x in list(chunks(analysis_headers, 5))])
+existing_text = '\n'.join([', '.join(x) for x in list(chunks(existing_contractors_headers, 5))])
 
 if len(hc_headers) != HC_HEADER_LENGTH:
     raise AssertionError('hc header inconsistencies')
@@ -326,7 +335,7 @@ if __name__ == '__main__':
     print(f'Outputting results in: {args.output}')
     print(f'contractor match ratio: {args.ratio_company}')
     print(f'address match ratio: {args.ratio_address}')
-    print(f'list of "generic domains:\n{BASE_GENERIC_DOMAIN}')
+    print(f'list of generic domains:\n{BASE_GENERIC_DOMAIN}')
     print(f'additional generic domain: {args.additional_generic_domain}')
     # read data
     cbx_data = []
@@ -382,6 +391,7 @@ if __name__ == '__main__':
     headers = []
     rd_headers_mapping = []
     hs_headers_mapping = []
+    existing_contractors_headers_mapping = []
     # check hc data consistency
     if hc_data and len(hc_data[0]) < len(hc_headers):
         print(f'WARNING: got {len(hc_data[0])} columns when at least {len(hc_headers)} is expected')
@@ -401,13 +411,13 @@ if __name__ == '__main__':
         if row[HC_COUNTRY].lower().strip() == 'ca':
             if row[HC_CONTACT_CURRENCY].lower().strip() not in ('cad', ''):
                 print(f'WARNING: currency and country mismatch: {row[HC_CONTACT_CURRENCY]} and'
-                      f' "{row[HC_COUNTRY]}". Expected CAD')
+                      f' "{row[HC_COUNTRY]}". Expected CAD in row {row}')
                 if not args.ignore_warnings:
                     exit(-1)
         elif row[HC_COUNTRY].lower().strip() != '':
             if row[HC_CONTACT_CURRENCY].lower().strip() not in ('usd', ''):
                 print(f'WARNING: currency and country mismatch: {row[HC_CONTACT_CURRENCY]} and'
-                      f' "{row[HC_COUNTRY]}". Expected USD')
+                      f' "{row[HC_COUNTRY]}". Expected USD in row {row}')
                 if not args.ignore_warnings:
                     exit(-1)
         row[HC_EMAIL] = str(row[HC_EMAIL]).strip()
@@ -434,6 +444,8 @@ if __name__ == '__main__':
         row[HC_COUNTRY] = row[HC_COUNTRY].upper()
         row[HC_STATE] = row[HC_STATE].upper()
         row[HC_CONTACT_CURRENCY] = row[HC_CONTACT_CURRENCY].upper()
+        # convert date-time to windows format
+        row[HC_CONTACT_TIMEZONE] = convertFromIANATimezone(row[HC_CONTACT_TIMEZONE])
     print(f'Completed reading {len(hc_data)} contractors.')
     print(f'Starting data analysis...')
 
@@ -452,12 +464,13 @@ if __name__ == '__main__':
     out_ws_missing_information = out_wb.create_sheet(title="missing_info")
     out_ws_follow_up_qualification = out_wb.create_sheet(title="follow_up_qualification")
     out_ws_onboarding_rd = out_wb.create_sheet(title="Data to import")
+    out_ws_existing_contractors = out_wb.create_sheet(title="Existing Contractors")
     out_ws_onboarding_hs = out_wb.create_sheet(title="Data for HS")
 
     sheets = (out_ws, out_ws_onboarding, out_ws_association_fee, out_ws_re_onboarding, out_ws_subscription_upgrade,
               out_ws_ambiguous_onboarding, out_ws_restore_suspended, out_ws_activation_link, out_ws_already_qualified,
               out_ws_add_questionnaire, out_ws_missing_information, out_ws_follow_up_qualification,
-              out_ws_onboarding_rd, out_ws_onboarding_hs)
+              out_ws_onboarding_rd, out_ws_existing_contractors, out_ws_onboarding_hs)
 
     # append analysis headers and move metadata headers at the end
     if not args.no_headers:
@@ -471,23 +484,51 @@ if __name__ == '__main__':
             metadata_array.insert(0, headers.pop(md_index))
         headers.extend(metadata_array)
         hs_headers.extend(metadata_array)  # hubspot headers must includes metadata if present
-        column_rd = column_hs = 0
+        existing_contractors_headers.extend(metadata_array)  # existing contractors headers must includes metadata if present
+        column_rd = column_hs = column_existing_contractors = 0
         for index, value in enumerate(headers):
             # skip the last two sheets since they have special mapping handled below
-            for sheet in sheets[:-2]:
+            for sheet in sheets[:-3]:
                 sheet.cell(1, index+1, value)
-            if value in rd_headers:
+            rd_headers_for_value = [s for s in rd_headers if value in s]
+            if rd_headers_for_value:
                 column_rd += 1
                 rd_headers_mapping.append(True)
-                out_ws_onboarding_rd.cell(1, column_rd, value)
+                # Invert code and id columns
+                if value == "pricing_group_id":
+                    adjustement = 1
+                    rd_pricing_group_id_col = column_rd
+                elif value == "pricing_group_code":
+                    adjustement = -1
+                    rd_pricing_group_code_col = column_rd
+                else:
+                    adjustement = 0
+
+                if value in rd_headers:
+                    out_ws_onboarding_rd.cell(1, column_rd + adjustement, value)
+                else:
+                    out_ws_onboarding_rd.cell(1, column_rd, rd_headers_for_value[0])
             else:
                 rd_headers_mapping.append(False)
+
             if value in hs_headers:
                 column_hs += 1
                 hs_headers_mapping.append(True)
                 out_ws_onboarding_hs.cell(1, column_hs, value)
             else:
                 hs_headers_mapping.append(False)
+
+            existing_contractors_headers_for_value = [s for s in existing_contractors_headers if value in s]
+            if existing_contractors_headers_for_value:
+                column_existing_contractors += 1
+                existing_contractors_headers_mapping.append(True)
+                if value in existing_contractors_headers:
+                    out_ws_existing_contractors.cell(1, column_existing_contractors, value)
+                else:
+                    out_ws_existing_contractors.cell(1, column_existing_contractors, existing_contractors_headers_for_value[0])
+            else:
+                existing_contractors_headers_mapping.append(False)
+                
         out_wb.save(filename=output_file)
     # match
     for index, hc_row in enumerate(hc_data):
@@ -690,6 +731,15 @@ if __name__ == '__main__':
         for i, value in enumerate(row):
             out_ws_follow_up_qualification.cell(index + 2, i + 1, value)
 
+    existing_contractors_rd = filter(lambda x: x[HC_HEADER_LENGTH+len(analysis_headers)-2] != 'onboarding' and x[HC_HEADER_LENGTH+len(analysis_headers)-2] != 'missing_info' , hc_data)
+
+    for index, row in enumerate(existing_contractors_rd):
+        column = 0
+        for i, value in enumerate(row):
+            if existing_contractors_headers_mapping[i]:
+                column += 1
+                out_ws_existing_contractors.cell(index + 2, column, value)
+
     hc_onboarding_rd = filter(lambda x: x[HC_HEADER_LENGTH+len(analysis_headers)-2] == 'onboarding',
                               hc_data)
     for index, row in enumerate(hc_onboarding_rd):
@@ -697,7 +747,13 @@ if __name__ == '__main__':
         for i, value in enumerate(row):
             if rd_headers_mapping[i]:
                 column += 1
-                out_ws_onboarding_rd.cell(index + 2, column, value)
+                # Invert code and id columns
+                if column == rd_pricing_group_id_col:
+                    out_ws_onboarding_rd.cell(index + 2, column + 1, value)
+                elif column == rd_pricing_group_code_col:
+                    out_ws_onboarding_rd.cell(index + 2, column - 1, value)
+                else:
+                    out_ws_onboarding_rd.cell(index + 2, column, value)
 
     for index, row in enumerate(hc_data):
         column = 0
