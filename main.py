@@ -71,7 +71,7 @@ analysis_headers = ['cbx_id', 'cbx_contractor', 'cbx_street', 'cbx_city', 'cbx_s
                     'is_in_relationship', 'is_qualified', 'ratio_company', 'ratio_address',
                     'contact_match', 'cbx_assessment_level', 'new_product', 'generic_domain', 'match_count', 'match_count_with_hc',
                     'analysis', 'is_subscription_upgrade', 'upgrade_price', 'prorated_upgrade_price', 'create_in_cbx',
-                    'action', 'index', 'subscription_data']
+                    'action', 'index']
 
 rd_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'contact_email', 'contact_phone',
               'contact_language', 'address', 'city', 'province_state_iso2', 'country_iso2',
@@ -669,7 +669,7 @@ if __name__ == '__main__':
                 subscription_upgrade = True
                 prorated_upgrade_price = upgrade_price
         else:
-            hc_row.extend(['' for x in range(len(analysis_headers)-7)])
+            hc_row.extend(['' for x in range(len(analysis_headers)-6)])
         create_in_cognibox = False if len(uniques_cbx_id) and not hc_row[HC_AMBIGUOUS] else True
         hc_row.append(subscription_upgrade)
         hc_row.append(upgrade_price)
