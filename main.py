@@ -98,7 +98,11 @@ BASE_GENERIC_DOMAIN = ['yahoo.ca', 'yahoo.com', 'hotmail.com', 'gmail.com', 'out
                        'hotmail.ca', 'live.ca', 'icloud.com', 'hotmail.fr', 'yahoo.com', 'outlook.fr', 'msn.com',
                        'globetrotter.net', 'live.com', 'sympatico.ca', 'live.fr', 'yahoo.fr', 'telus.net',
                        'shaw.ca', 'me.com', 'bell.net', 'cablevision.qc.ca', 'live.ca', 'tlb.sympatico.ca',
-                       '', 'videotron.qc.ca', 'ivic.qc.ca', 'qc.aira.com', 'canada.ca', 'axion.ca', 'bellsouth.net', ]
+                       '', 'videotron.qc.ca', 'ivic.qc.ca', 'qc.aira.com', 'canada.ca', 'axion.ca', 'bellsouth.net', 
+                       'telusplanet.net','rogers.com', 'mymts.net', 'nb.aibn.com', 'on.aibn.com', 'live.be', 'nbnet.nb.ca',
+                       'execulink.com', 'bellaliant.com', 'nf.aibn.com', 'clintar.com', 'pathcom.com', 'oricom.ca', 'mts.net',
+                       'xplornet.com', 'mcsnet.ca', 'att.net', 'ymail.com', 'mail.com', 'bellaliant.net', 'ns.sympatico.ca', 
+                       'ns.aliantzinc.ca', 'mnsi.net']
 # noinspection SpellCheckingInspection
 BASE_GENERIC_COMPANY_NAME_WORDS = ['construction', 'contracting', 'industriel', 'industriels', 'service',
                                    'services', 'inc', 'limited', 'ltd', 'ltee', 'ltée', 'co', 'industrial',
