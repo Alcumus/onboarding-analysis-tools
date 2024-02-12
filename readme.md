@@ -20,7 +20,7 @@ The hardest is done...
 ## Work to do in preparation to the analysis
 
 1. Create a folder (let's say on your Desktop) where you will do your analysis (With Windows Explorer)
-2. Connect to redash (with your browser, you need an account...) and run the "SBL - Business Unit Extractor" query (don't forget to update the dataset by clicking the button in the bottom right corner)
+2. Connect to redash (with your browser, you need an account...) and run the "2024 Business Units Extractor" query (don't forget to update the dataset by clicking the button in the bottom right corner)
 3. It can take quite sometime to run the query be patient...
 4. Download the query result in CSV format (by clicking the ... button at the bottom of the results)
 5. Rename the downloaded file into something short and friendly, Ex: db-jan.csv

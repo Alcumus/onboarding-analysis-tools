@@ -10,13 +10,13 @@ from datetime import datetime, timedelta
 from convertTimeZone import convertFromIANATimezone
 
 CBX_DEFAULT_STANDARD_SUBSCRIPTION = 803
-CBX_HEADER_LENGTH = 26
+CBX_HEADER_LENGTH = 28
 # noinspection SpellCheckingInspection
 CBX_ID, CBX_COMPANY_FR, CBX_COMPANY_EN, CBX_COMPANY_OLD, CBX_ADDRESS, CBX_CITY, CBX_STATE, \
     CBX_COUNTRY, CBX_ZIP, CBX_FISTNAME, CBX_LASTNAME, CBX_EMAIL, CBX_EXPIRATION_DATE, CBX_REGISTRATION_STATUS, \
     CBX_SUSPENDED, CBX_MODULES, CBX_ACCESS_MODES, CBX_ACCOUNT_TYPE, CBX_SUB_PRICE_CAD, CBX_EMPL_PRICE_CAD,\
     CBX_SUB_PRICE_USD, CBX_EMPL_PRICE_USD, CBX_HIRING_CLIENT_NAMES, \
-    CBX_HIRING_CLIENT_IDS, CBX_HIRING_CLIENT_QSTATUS, CBX_PARENTS = range(CBX_HEADER_LENGTH)
+    CBX_HIRING_CLIENT_IDS, CBX_HIRING_CLIENT_QSTATUS, CBX_PARENTS, CBX_ASSESSMENT_LEVEL, CBX_IS_NEW_PRODUCT = range(CBX_HEADER_LENGTH)
 
 HC_HEADER_LENGTH = 41
 HC_COMPANY, HC_FIRSTNAME, HC_LASTNAME, HC_EMAIL, HC_CONTACT_PHONE, HC_CONTACT_LANGUAGE, HC_STREET, HC_CITY, \
@@ -31,6 +31,15 @@ HC_COMPANY, HC_FIRSTNAME, HC_LASTNAME, HC_EMAIL, HC_CONTACT_PHONE, HC_CONTACT_LA
 
 SUPPORTED_CURRENCIES = ('CAD', 'USD')
 
+assessment_levels = {
+    "gold": 3,
+    "silver": 2,
+    "bronze" : 1,
+    "level3": 3, 
+    "level2": 2,
+    "level1": 1
+}
+
 # Used in order to switch code and id in data to import
 rd_pricing_group_id_col = -1
 rd_pricing_group_code_col = -1
@@ -40,7 +49,7 @@ cbx_headers = ['id', 'name_fr', 'name_en', 'old_names', 'address', 'city', 'stat
                'first_name', 'last_name', 'email', 'cbx_expiration_date', 'registration_code', 'suspended',
                'modules', 'access_modes', 'code', 'subscription_price_cad', 'employee_price_cad',
                'subscription_price_usd', 'employee_price_usd', 'hiring_client_names',
-               'hiring_client_ids', 'hiring_client_qstatus', 'parents']
+               'hiring_client_ids', 'hiring_client_qstatus', 'parents', 'assessment_level', 'new_product']
 
 # noinspection SpellCheckingInspection
 hc_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'contact_email', 'contact_phone',
@@ -60,7 +69,7 @@ analysis_headers = ['cbx_id', 'cbx_contractor', 'cbx_street', 'cbx_city', 'cbx_s
                     'cbx_subscription_fee', 'cbx_employee_price', 'parents', 'previous',
                     'hiring_client_names', 'hiring_client_count',
                     'is_in_relationship', 'is_qualified', 'ratio_company', 'ratio_address',
-                    'contact_match', 'generic_domain', 'match_count', 'match_count_with_hc',
+                    'contact_match', 'cbx_assessment_level', 'new_product', 'generic_domain', 'match_count', 'match_count_with_hc',
                     'analysis', 'is_subscription_upgrade', 'upgrade_price', 'prorated_upgrade_price', 'create_in_cbx',
                     'action', 'index']
 
@@ -89,7 +98,11 @@ BASE_GENERIC_DOMAIN = ['yahoo.ca', 'yahoo.com', 'hotmail.com', 'gmail.com', 'out
                        'hotmail.ca', 'live.ca', 'icloud.com', 'hotmail.fr', 'yahoo.com', 'outlook.fr', 'msn.com',
                        'globetrotter.net', 'live.com', 'sympatico.ca', 'live.fr', 'yahoo.fr', 'telus.net',
                        'shaw.ca', 'me.com', 'bell.net', 'cablevision.qc.ca', 'live.ca', 'tlb.sympatico.ca',
-                       '', 'videotron.qc.ca', 'ivic.qc.ca', 'qc.aira.com', 'canada.ca', 'axion.ca', 'bellsouth.net', ]
+                       '', 'videotron.qc.ca', 'ivic.qc.ca', 'qc.aira.com', 'canada.ca', 'axion.ca', 'bellsouth.net', 
+                       'telusplanet.net','rogers.com', 'mymts.net', 'nb.aibn.com', 'on.aibn.com', 'live.be', 'nbnet.nb.ca',
+                       'execulink.com', 'bellaliant.com', 'nf.aibn.com', 'clintar.com', 'pathcom.com', 'oricom.ca', 'mts.net',
+                       'xplornet.com', 'mcsnet.ca', 'att.net', 'ymail.com', 'mail.com', 'bellaliant.net', 'ns.sympatico.ca', 
+                       'ns.aliantzinc.ca', 'mnsi.net']
 # noinspection SpellCheckingInspection
 BASE_GENERIC_COMPANY_NAME_WORDS = ['construction', 'contracting', 'industriel', 'industriels', 'service',
                                    'services', 'inc', 'limited', 'ltd', 'ltee', 'ltée', 'co', 'industrial',
@@ -202,6 +215,7 @@ def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, c
     employee_price_usd = float(cbx_row[CBX_EMPL_PRICE_USD]) if cbx_row[CBX_EMPL_PRICE_USD] else 0.0
     sub_price_cad = float(cbx_row[CBX_SUB_PRICE_CAD]) if cbx_row[CBX_SUB_PRICE_CAD] else 0.0
     employee_price_cad = float(cbx_row[CBX_EMPL_PRICE_CAD]) if cbx_row[CBX_EMPL_PRICE_CAD] else 0.0
+
     if hc_row[HC_CONTACT_CURRENCY] != '' and hc_row[HC_CONTACT_CURRENCY] not in SUPPORTED_CURRENCIES:
         raise AssertionError(f'Invalid currency: {hc_row[HC_CONTACT_CURRENCY]}, must be in {SUPPORTED_CURRENCIES}')
     for idx, val in enumerate(hiring_clients_list):
@@ -227,7 +241,9 @@ def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, c
             'parents': cbx_row[CBX_PARENTS], 'previous': cbx_row[CBX_COMPANY_OLD],
             'hiring_client_names': cbx_row[CBX_HIRING_CLIENT_NAMES], 'hiring_client_count': hc_count,
             'is_in_relationship': is_in_relationship, 'is_qualified': is_qualified,
-            'ratio_company': ratio_company, 'ratio_address': ratio_address, 'contact_match': contact_match,
+            'ratio_company': ratio_company, 'ratio_address': ratio_address, 'contact_match': contact_match, 
+            'cbx_assessment_level': cbx_row[CBX_ASSESSMENT_LEVEL],
+            'new_product': cbx_row[CBX_IS_NEW_PRODUCT]
             }
 
 
@@ -321,6 +337,15 @@ def clean_company_name(name):
     name = remove_generics(name)
     return name
 
+
+def parse_assessment_level(level):
+    if(level is None or (isinstance(level, int) and level > 0 and level < 4)):
+        return level
+    
+    if(level.lower() in assessment_levels):
+        return assessment_levels[level.lower()]
+    
+    return 0
 
 if __name__ == '__main__':
     data_path = './data/'
@@ -620,12 +645,12 @@ if __name__ == '__main__':
             hc_row.append('\n'.join(ids))
             # Calculate subscription upgrade and prorating
             if hc_row[HC_BASE_SUBSCRIPTION_FEE] == '':
-                bsf = CBX_DEFAULT_STANDARD_SUBSCRIPTION
-                print(f'WARNING: no subscription fee defined for {hc_row[HC_COMPANY]}, using default {bsf}')
+                base_subscription_fee = CBX_DEFAULT_STANDARD_SUBSCRIPTION
+                print(f'WARNING: no subscription fee defined for {hc_row[HC_COMPANY]}, using default {base_subscription_fee}')
             else:
-                bsf = hc_row[HC_BASE_SUBSCRIPTION_FEE]
+                base_subscription_fee = hc_row[HC_BASE_SUBSCRIPTION_FEE]
             current_sub_total = matches[0]['subscription_price'] + matches[0]['employee_price']
-            price_diff = float(bsf) - current_sub_total
+            price_diff = float(base_subscription_fee) - current_sub_total
             if price_diff > 0 and matches[0]['registration_status'] == 'Active' and matches[0]['expiration_date'] \
                     and current_sub_total > 0.0:
                 subscription_upgrade = True
@@ -644,6 +669,9 @@ if __name__ == '__main__':
             if matches[0]['account_type'] in ('elearning', 'plan_nord', 'portail_pfr', 'special'):
                 subscription_upgrade = True
                 prorated_upgrade_price = upgrade_price = hc_row[HC_BASE_SUBSCRIPTION_FEE]
+            if parse_assessment_level(matches[0]['cbx_assessment_level']) < parse_assessment_level(hc_row[HC_ASSESSMENT_LEVEL]):
+                subscription_upgrade = True
+                prorated_upgrade_price = upgrade_price
         else:
             hc_row.extend(['' for x in range(len(analysis_headers)-6)])
         create_in_cognibox = False if len(uniques_cbx_id) and not hc_row[HC_AMBIGUOUS] else True
