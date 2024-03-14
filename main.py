@@ -37,7 +37,10 @@ assessment_levels = {
     "bronze" : 1,
     "level3": 3, 
     "level2": 2,
-    "level1": 1
+    "level1": 1,
+    "3":3,
+    "2":2,
+    "1":1
 }
 
 # Used in order to switch code and id in data to import
