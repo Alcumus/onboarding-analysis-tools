@@ -37,10 +37,7 @@ assessment_levels = {
     "bronze" : 1,
     "level3": 3, 
     "level2": 2,
-    "level1": 1,
-    "3":3,
-    "2":2,
-    "1":1
+    "level1": 1
 }
 
 # Used in order to switch code and id in data to import
@@ -350,6 +347,23 @@ def parse_assessment_level(level):
     
     return 0
 
+def extractExtension(phoneNumber, existingExtension):
+    phoneNumber = phoneNumber.replace(" ","")
+    phoneNumber = phoneNumber.lower().replace("#","x")
+    phoneNumber = phoneNumber.lower().replace("ext","x")
+    phoneNumber = phoneNumber.lower().replace("p", "x")
+    phoneNumber = phoneNumber.lower().replace("poste", "x")
+    phoneNumber = phoneNumber.lower().replace(",", "x")
+    splitNumber = phoneNumber.split("x", 1)
+
+    if(existingExtension):
+        if(len(splitNumber) < 2):
+            splitNumber.append(existingExtension)
+        else:
+            splitNumber[1] = existingExtension
+
+    return splitNumber
+
 if __name__ == '__main__':
     data_path = './data/'
     cbx_file = data_path + args.cbx_list
@@ -466,6 +480,12 @@ if __name__ == '__main__':
             row[HC_EXTENSION] = extension
         if isinstance(row[HC_EXTENSION], str):
             row[HC_EXTENSION] = re.sub("[^0-9]", "", row[HC_EXTENSION])
+        if isinstance(row[HC_PHONE], str):
+            phoneNumberExtensionPair = extractExtension(row[HC_PHONE], row[HC_EXTENSION])
+            row[HC_PHONE] = phoneNumberExtensionPair[0]
+            if(len(phoneNumberExtensionPair) > 1 and extension == ''):
+                row[HC_EXTENSION] = phoneNumberExtensionPair[1]
+            
         # make language lower case; currency, state ISO2 and country ISO2 upper case
         row[HC_LANGUAGE] = row[HC_LANGUAGE].lower()
         row[HC_CONTACT_LANGUAGE] = row[HC_CONTACT_LANGUAGE].lower()
@@ -762,7 +782,7 @@ if __name__ == '__main__':
         for i, value in enumerate(row):
             out_ws_follow_up_qualification.cell(index + 2, i + 1, value)
 
-    existing_contractors_rd = filter(lambda x: x[HC_HEADER_LENGTH+len(analysis_headers)-2] != 'onboarding' and x[HC_HEADER_LENGTH+len(analysis_headers)-2] != 'missing_info' , hc_data)
+    existing_contractors_rd = filter(lambda x: x[HC_HEADER_LENGTH+len(analysis_headers)-2] != 'onboarding' and x[HC_HEADER_LENGTH+len(analysis_headers)-2] != 'missing_info' and x[HC_HEADER_LENGTH] != '' , hc_data)
 
     for index, row in enumerate(existing_contractors_rd):
         column = 0
@@ -771,7 +791,8 @@ if __name__ == '__main__':
                 column += 1
                 out_ws_existing_contractors.cell(index + 2, column, value)
 
-    hc_onboarding_rd = filter(lambda x: x[HC_HEADER_LENGTH+len(analysis_headers)-2] == 'onboarding',
+    hc_onboarding_rd = filter(lambda x: x[HC_HEADER_LENGTH+len(analysis_headers)-2] == 'onboarding' or 
+                              (x[HC_HEADER_LENGTH+len(analysis_headers)-2] == 'ambiguous_onboarding' and x[HC_HEADER_LENGTH] == ''),
                               hc_data)
     for index, row in enumerate(hc_onboarding_rd):
         column = 0

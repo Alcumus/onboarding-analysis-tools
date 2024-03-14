@@ -35,6 +35,7 @@ timezones = {
     "America/North_Dakota/New_Salem": "Central Time (US & Canada)",
     "America/Ojinaga": "Central Time (US & Canada)",
     "America/Matamoros": "Central Time (US & Canada)",
+    "America/Winnipeg": "Central Time (US & Canada)",
     "America/Knox_IN": "Central Time (US & Canada)",
     "America/Indiana/Tell_City": "Central Time (US & Canada)",
     "America/Indiana/Knox": "Central Time (US & Canada)",
@@ -66,6 +67,8 @@ timezones = {
     "America/Louisville": "Eastern Time (US & Canada)",
     "America/Pangnirtung": "Eastern Time (US & Canada)",
     "America/Toronto": "Eastern Time (US & Canada)",
+    "America/Panama": "Eastern Time (US & Canada)",
+    "America/Cancun": "Eastern Time (US & Canada)",
     "EST5EDT": "Eastern Time (US & Canada)",
     "US/Eastern": "Eastern Time (US & Canada)",
     "America/Indiana/Indianapolis": "Indiana (East)",
@@ -178,10 +181,10 @@ timezones = {
     "Pacific/Auckland": "Auckland",
     "Pacific/Fiji": "Fiji",
     "Pacific/Tongatapu": "Nuku'alofa",
-    "Pacific/Pitcairn": "Pitcairn",
+    "Pacific/Pitcairn": "Pacific Time (US & Canada)",
     "America/El_Salvador": "Central Time (US & Canada)",
-    "America/Whitehorse": "Whitehorse",
-    "Atlantic/Bermuda": "Bermuda",
+    "America/Whitehorse": "Pacific Time (US & Canada)",
+    "Atlantic/Bermuda": "Atlantic Time (Canada)",
     "America/Creston": "Pacific Time (US & Canada)"
 }
 
