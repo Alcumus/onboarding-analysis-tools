@@ -55,7 +55,7 @@ cbx_headers = ['id', 'name_fr', 'name_en', 'old_names', 'address', 'city', 'stat
                'hiring_client_ids', 'hiring_client_qstatus', 'parents', 'assessment_level', 'new_product']
 
 # noinspection SpellCheckingInspection
-hc_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'contact_email', 'contact_phone',
+hiring_client_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'contact_email', 'contact_phone',
               'contact_language', 'address', 'city', 'province_state_iso2', 'country_iso2',
               'postal_code', 'category', 'description', 'phone', 'extension', 'fax', 'website', 'language',
               'is_take_over', 'qualification_expiration_date',
@@ -86,7 +86,7 @@ rd_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'con
 existing_contractors_headers = ['cbx_id']
 existing_contractors_headers.extend(rd_headers.copy())
 
-hs_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'contact_email', 'contact_phone',
+hubspot_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'contact_email', 'contact_phone',
               'contact_language', 'address', 'city', 'province_state_iso2', 'country_iso2',
               'postal_code', 'cbx_id', 'cbx_expiration_date', 'questionnaire_name',
               'questionnaire_id', 'hiring_client_name', 'hiring_client_id', 'action']
@@ -119,14 +119,14 @@ def chunks(lst, n):
         yield lst[i:i + n]
 
 
-hc_headers_with_metadata = hc_headers.copy()
+hc_headers_with_metadata = hiring_client_headers.copy()
 hc_headers_with_metadata.extend(metadata_headers)
 cbx_headers_text = '\n'.join([', '.join(x) for x in list(chunks(cbx_headers, 5))])
 hc_headers_text = '\n'.join([', '.join(x) for x in list(chunks(hc_headers_with_metadata, 5))])
 analysis_headers_text = '\n'.join([', '.join(x) for x in list(chunks(analysis_headers, 5))])
 existing_text = '\n'.join([', '.join(x) for x in list(chunks(existing_contractors_headers, 5))])
 
-if len(hc_headers) != HC_HEADER_LENGTH:
+if len(hiring_client_headers) != HC_HEADER_LENGTH:
     raise AssertionError('hc header inconsistencies')
 
 if len(cbx_headers) != CBX_HEADER_LENGTH:
@@ -421,17 +421,17 @@ if __name__ == '__main__':
     hs_headers_mapping = []
     existing_contractors_headers_mapping = []
     # check hc data consistency
-    if hc_data and len(hc_data[0]) < len(hc_headers):
-        print(f'WARNING: got {len(hc_data[0])} columns when at least {len(hc_headers)} is expected')
+    if hc_data and len(hc_data[0]) < len(hiring_client_headers):
+        print(f'WARNING: got {len(hc_data[0])} columns when at least {len(hiring_client_headers)} is expected')
         if not args.ignore_warnings:
             exit(-1)
     if not args.no_headers:
         headers = hc_data.pop(0)
         headers = [x.lower().strip() for x in headers]
-        check_headers(headers, hc_headers, args.ignore_warnings)
+        check_headers(headers, hiring_client_headers, args.ignore_warnings)
     else:
-        if hc_data and len(hc_data[0]) != len(hc_headers):
-            print(f'WARNING: got {len(hc_data[0])} columns when {len(hc_headers)} is exactly expected')
+        if hc_data and len(hc_data[0]) != len(hiring_client_headers):
+            print(f'WARNING: got {len(hc_data[0])} columns when {len(hiring_client_headers)} is exactly expected')
             if not args.ignore_warnings:
                 exit(-1)
     # checking currency integrity and strip characters from contact phone
@@ -511,8 +511,9 @@ if __name__ == '__main__':
         for md_index in metadata_indexes:
             metadata_array.insert(0, headers.pop(md_index))
         headers.extend(metadata_array)
-        hs_headers.extend(metadata_array)  # hubspot headers must includes metadata if present
+        hubspot_headers.extend(metadata_array)  # hubspot headers must includes metadata if present
         existing_contractors_headers.extend(metadata_array)  # existing contractors headers must includes metadata if present
+        rd_headers.extend(metadata_array)
         column_rd = column_hs = column_existing_contractors = 0
         for index, value in enumerate(headers):
             # skip the last two sheets since they have special mapping handled below
@@ -539,7 +540,7 @@ if __name__ == '__main__':
             else:
                 rd_headers_mapping.append(False)
 
-            if value in hs_headers:
+            if value in hubspot_headers:
                 column_hs += 1
                 hs_headers_mapping.append(True)
                 out_ws_onboarding_hs.cell(1, column_hs, value)
@@ -586,9 +587,9 @@ if __name__ == '__main__':
                     contact_match = False
                     if hc_email:
                         if hc_domain in GENERIC_DOMAIN:
-                            contact_match = True if cbx_email == hc_email else False
+                            contact_match = True if cbx_email.replace(".example.com","") == hc_email else False
                         else:
-                            contact_match = True if cbx_domain == hc_domain else False
+                            contact_match = True if cbx_domain.replace(".example.com", "") == hc_domain else False
                     else:
                         contact_match = False
                     cbx_zip = cbx_row[CBX_ZIP].replace(' ', '').upper()
@@ -597,8 +598,8 @@ if __name__ == '__main__':
                     cbx_parents = cbx_row[CBX_PARENTS]
                     cbx_previous = cbx_row[CBX_COMPANY_OLD]
                     cbx_address = cbx_row[CBX_ADDRESS].lower().replace('.', '').strip()
-                    ratio_company_fr = fuzz.token_sort_ratio(cbx_company_fr, clean_hc_company)
-                    ratio_company_en = fuzz.token_sort_ratio(cbx_company_en, clean_hc_company)
+                    ratio_company_fr = fuzz.token_sort_ratio(cbx_company_fr.replace("CCCBX_", ""), clean_hc_company)
+                    ratio_company_en = fuzz.token_sort_ratio(cbx_company_en.replace("CCCBX_",""), clean_hc_company)
                     if cbx_row[CBX_COUNTRY] != hc_row[HC_COUNTRY]:
                         ratio_zip = ratio_address = 0.0
                     else:
@@ -672,7 +673,9 @@ if __name__ == '__main__':
             if matches[0]['account_type'] in ('elearning', 'plan_nord', 'portail_pfr', 'special'):
                 subscription_upgrade = True
                 prorated_upgrade_price = upgrade_price = hc_row[HC_BASE_SUBSCRIPTION_FEE]
+            print(f'CBX Assessment Level: {matches[0]["cbx_assessment_level"]}.  Requested Assesssment Level: {parse_assessment_level(hc_row[HC_ASSESSMENT_LEVEL])}')
             if parse_assessment_level(matches[0]['cbx_assessment_level']) < parse_assessment_level(hc_row[HC_ASSESSMENT_LEVEL]):
+                print("Assessment level upgrade")
                 subscription_upgrade = True
                 prorated_upgrade_price = upgrade_price
         else:
