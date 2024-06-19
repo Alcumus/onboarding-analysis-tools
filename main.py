@@ -301,8 +301,8 @@ def action(hc_data, cbx_data, create, subscription_update, expiration_date, is_q
                         return 'subscription_upgrade'
                     elif hc_data[HC_IS_ASSOCIATION_FEE] and not cbx_data['is_in_relationship']:
                         if expiration_date:
-                            in_six_weeks = datetime.now() + timedelta(weeks=6)
-                            if expiration_date > in_six_weeks:
+                            in_60_days = datetime.now() + timedelta(days=60)
+                            if expiration_date > in_60_days:
                                 return 'association_fee'
                             else:
                                 return 'add_questionnaire'
