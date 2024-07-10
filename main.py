@@ -633,7 +633,7 @@ if __name__ == '__main__':
             ids.append(f'{item["cbx_id"]}, {item["company"]}, {item["address"]}, {item["city"]}, {item["state"]} '
                        f'{item["country"]} {item["zip"]}, {item["email"]}, {item["first_name"]} {item["last_name"]}'
                        f' --> CR{item["ratio_company"]}, AR{item["ratio_address"]},'
-                       f' CM{item["contact_match"]}, HCC{item["hiring_client_count"]}, MDLs[{item["modules"]}]')
+                       f' CM{item["contact_match"]}, HCC{item["hiring_client_count"]}, M[{item["modules"]}]')
         # append matching results to the hc_list
         match_data = []
         uniques_cbx_id = set(item['cbx_id'] for item in matches)
@@ -674,9 +674,9 @@ if __name__ == '__main__':
             if matches[0]['account_type'] in ('elearning', 'plan_nord', 'portail_pfr', 'special'):
                 subscription_upgrade = True
                 prorated_upgrade_price = upgrade_price = hc_row[HC_BASE_SUBSCRIPTION_FEE]
-            print(f'CBX Assessment Level: {matches[0]["cbx_assessment_level"]}.  Requested Assesssment Level: {parse_assessment_level(hc_row[HC_ASSESSMENT_LEVEL])}')
+            # print(f'CBX Assessment Level: {matches[0]["cbx_assessment_level"]}.  Requested Assesssment Level: {parse_assessment_level(hc_row[HC_ASSESSMENT_LEVEL])}')
             if parse_assessment_level(matches[0]['cbx_assessment_level']) < parse_assessment_level(hc_row[HC_ASSESSMENT_LEVEL]):
-                print("Assessment level upgrade")
+                # print("Assessment level upgrade")
                 subscription_upgrade = True
                 prorated_upgrade_price = upgrade_price
         else:
@@ -812,15 +812,16 @@ if __name__ == '__main__':
         for col, value in dims.items():
             sheet.column_dimensions[col].width = value
         if sheet != out_ws_onboarding_rd:
-            sheet.column_dimensions[get_column_letter(HC_HEADER_LENGTH+len(analysis_headers)-6)].width = 150
-            sheet.column_dimensions[get_column_letter(HC_HEADER_LENGTH+len(analysis_headers)-16)].width = 150
+            sheet.column_dimensions[get_column_letter(HC_HEADER_LENGTH+analysis_headers.index("hc_contractor_summary")+1)].width = 150
+            sheet.column_dimensions[get_column_letter(HC_HEADER_LENGTH+analysis_headers.index("analysis")+1)].width = 150
             sheet.column_dimensions[get_column_letter(HC_HEADER_LENGTH+len(analysis_headers)-17)].width = 150
             sheet.column_dimensions[get_column_letter(HC_HEADER_LENGTH+len(analysis_headers)-18)].width = 150
             for i in range(2, len(hc_data)+1):
-                sheet.cell(i, HC_HEADER_LENGTH+len(analysis_headers)-6).alignment = Alignment(wrapText=True)
-                sheet.cell(i, HC_HEADER_LENGTH+len(analysis_headers)-16).alignment = Alignment(wrapText=True)
+                sheet.cell(i, HC_HEADER_LENGTH+analysis_headers.index("analysis")+1).alignment = Alignment(wrapText=True)
+                sheet.cell(i, HC_HEADER_LENGTH+analysis_headers.index("hc_contractor_summary")+1).alignment = Alignment(wrapText=True)
                 sheet.cell(i, HC_HEADER_LENGTH+len(analysis_headers)-17).alignment = Alignment(wrapText=True)
                 sheet.cell(i, HC_HEADER_LENGTH+len(analysis_headers)-18).alignment = Alignment(wrapText=True)
+                
         sheet.add_table(tab)
     out_wb.save(filename=output_file)
     print(f'Completed data analysis...')
