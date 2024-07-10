@@ -66,14 +66,14 @@ hiring_client_headers = ['contractor_name', 'contact_first_name', 'contact_last_
               'force_cbx_id', 'ambiguous', 'contractorcheck_account', 'assessment_level']
 
 # noinspection SpellCheckingInspection
-analysis_headers = ['cbx_id', 'cbx_contractor', 'cbx_street', 'cbx_city', 'cbx_state', 'cbx_zip', 'cbx_country',
+analysis_headers = ['cbx_id', 'hc_contractor_summary', 'analysis','cbx_contractor', 'cbx_street', 'cbx_city', 'cbx_state', 'cbx_zip', 'cbx_country',
                     'cbx_expiration_date', 'registration_status', 'suspended', 'cbx_email',
                     'cbx_first_name', 'cbx_last_name', 'modules', 'cbx_account_type',
                     'cbx_subscription_fee', 'cbx_employee_price', 'parents', 'previous',
                     'hiring_client_names', 'hiring_client_count',
                     'is_in_relationship', 'is_qualified', 'ratio_company', 'ratio_address',
                     'contact_match', 'cbx_assessment_level', 'new_product', 'generic_domain', 'match_count', 'match_count_with_hc',
-                    'analysis', 'is_subscription_upgrade', 'upgrade_price', 'prorated_upgrade_price', 'create_in_cbx',
+                    'is_subscription_upgrade', 'upgrade_price', 'prorated_upgrade_price', 'create_in_cbx',
                     'action', 'index']
 
 rd_headers = ['contractor_name', 'contact_first_name', 'contact_last_name', 'contact_email', 'contact_phone',
@@ -119,12 +119,12 @@ def chunks(lst, n):
         yield lst[i:i + n]
 
 
-hc_headers_with_metadata = hiring_client_headers.copy()
-hc_headers_with_metadata.extend(metadata_headers)
+hiring_client_headers_with_metadata = hiring_client_headers.copy()
+hiring_client_headers_with_metadata.extend(metadata_headers)
 cbx_headers_text = '\n'.join([', '.join(x) for x in list(chunks(cbx_headers, 5))])
-hc_headers_text = '\n'.join([', '.join(x) for x in list(chunks(hc_headers_with_metadata, 5))])
+hiring_client_headers_text = '\n'.join([', '.join(x) for x in list(chunks(hiring_client_headers_with_metadata, 5))])
 analysis_headers_text = '\n'.join([', '.join(x) for x in list(chunks(analysis_headers, 5))])
-existing_text = '\n'.join([', '.join(x) for x in list(chunks(existing_contractors_headers, 5))])
+existing_contractors_text = '\n'.join([', '.join(x) for x in list(chunks(existing_contractors_headers, 5))])
 
 if len(hiring_client_headers) != HC_HEADER_LENGTH:
     raise AssertionError('hc header inconsistencies')
@@ -142,7 +142,7 @@ parser.add_argument('cbx_list',
 
 parser.add_argument('hc_list',
                     help=f'xlsx file of the hiring client contractors and the '
-                         f'following columns:\n{hc_headers_text}\n\n')
+                         f'following columns:\n{hiring_client_headers_text}\n\n')
 parser.add_argument('output',
                     help=f'the xlsx file to be created with the hc_list columns and the following analysis columns:'
                          f'\n{analysis_headers_text}\n\n**Please note that metadata columns from the'
@@ -199,7 +199,7 @@ GENERIC_COMPANY_NAME_WORDS = BASE_GENERIC_COMPANY_NAME_WORDS + \
 def smart_boolean(bool_data):
     if isinstance(bool_data, str):
         bool_data = bool_data.lower().strip()
-        return True if bool_data in ('true', '=true', 'vraie', '=vraie', '1') else False
+        return True if bool_data in ('true', '=true', 'yes', 'vraie', '=vraie', '1') else False
     else:
         return bool(bool_data)
 
@@ -218,6 +218,7 @@ def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, c
     employee_price_usd = float(cbx_row[CBX_EMPL_PRICE_USD]) if cbx_row[CBX_EMPL_PRICE_USD] else 0.0
     sub_price_cad = float(cbx_row[CBX_SUB_PRICE_CAD]) if cbx_row[CBX_SUB_PRICE_CAD] else 0.0
     employee_price_cad = float(cbx_row[CBX_EMPL_PRICE_CAD]) if cbx_row[CBX_EMPL_PRICE_CAD] else 0.0
+    hiring_client_contractor_summary = f'{hc_row[HC_COMPANY]}, {hc_row[HC_STREET]}, {hc_row[HC_CITY]}, {hc_row[HC_STATE]}, {hc_row[HC_COUNTRY]}, {hc_row[HC_ZIP]}, {hc_row[HC_EMAIL]}, {hc_row[HC_FIRSTNAME]} {hc_row[HC_LASTNAME]}'
 
     if hc_row[HC_CONTACT_CURRENCY] != '' and hc_row[HC_CONTACT_CURRENCY] not in SUPPORTED_CURRENCIES:
         raise AssertionError(f'Invalid currency: {hc_row[HC_CONTACT_CURRENCY]}, must be in {SUPPORTED_CURRENCIES}')
@@ -232,7 +233,7 @@ def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, c
         expiration_date = datetime.strptime(cbx_row[CBX_EXPIRATION_DATE],
                                         "%d/%m/%Y") if cbx_row[CBX_EXPIRATION_DATE] else None
 
-    return {'cbx_id': int(cbx_row[CBX_ID]), 'company': cbx_company, 'address': cbx_row[CBX_ADDRESS],
+    return {'cbx_id': int(cbx_row[CBX_ID]), 'hc_contractor_summary': hiring_client_contractor_summary, 'analysis':'', 'company': cbx_company, 'address': cbx_row[CBX_ADDRESS],
             'city': cbx_row[CBX_CITY], 'state': cbx_row[CBX_STATE], 'zip': cbx_row[CBX_ZIP],
             'country': cbx_row[CBX_COUNTRY], 'expiration_date': expiration_date,
             'registration_status': cbx_row[CBX_REGISTRATION_STATUS],
@@ -630,9 +631,9 @@ if __name__ == '__main__':
                          reverse=True)
         for item in matches[0:10]:
             ids.append(f'{item["cbx_id"]}, {item["company"]}, {item["address"]}, {item["city"]}, {item["state"]} '
-                       f'{item["country"]} {item["zip"]}, {item["email"]}'
+                       f'{item["country"]} {item["zip"]}, {item["email"]}, {item["first_name"]} {item["last_name"]}'
                        f' --> CR{item["ratio_company"]}, AR{item["ratio_address"]},'
-                       f' CM{item["contact_match"]}, HCC{item["hiring_client_count"]}')
+                       f' CM{item["contact_match"]}, HCC{item["hiring_client_count"]}, MDLs[{item["modules"]}]')
         # append matching results to the hc_list
         match_data = []
         uniques_cbx_id = set(item['cbx_id'] for item in matches)
@@ -646,7 +647,7 @@ if __name__ == '__main__':
             hc_row.append(True if hc_domain in GENERIC_DOMAIN else False)
             hc_row.append(len(uniques_cbx_id) if len(uniques_cbx_id) else '')
             hc_row.append(len([i for i in matches if i['hiring_client_count'] > 0]))
-            hc_row.append('\n'.join(ids))
+            hc_row[HC_HEADER_LENGTH + analysis_headers.index("analysis")] = ('\n'.join(ids))
             # Calculate subscription upgrade and prorating
             if hc_row[HC_BASE_SUBSCRIPTION_FEE] == '':
                 base_subscription_fee = CBX_DEFAULT_STANDARD_SUBSCRIPTION
