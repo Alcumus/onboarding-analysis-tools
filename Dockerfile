@@ -5,8 +5,8 @@ FROM python:3.9.7-slim
 WORKDIR /usr/src/
 
 # set environment variables
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
 RUN apt --yes update && apt --yes upgrade && apt-get --yes install netcat
 
