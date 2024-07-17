@@ -34,4 +34,4 @@ VOLUME $HOME/data
 
 # change to the app user
 USER script
-ENTRYPOINT ["python", "main.py"]
+ENTRYPOINT ["python", "companyNameLookup.py"]
