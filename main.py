@@ -627,7 +627,7 @@ if __name__ == '__main__':
                             add_analysis_data(hc_row, cbx_row, ratio_company, ratio_address, contact_match))
         ids = []
         best_match = 0
-        matches = sorted(matches, key=lambda x: (x['hiring_client_count'], x["ratio_address"], x["ratio_company"]),
+        matches = sorted(matches, key=lambda x: (x["ratio_address"], x["ratio_company"], x['hiring_client_count']),
                          reverse=True)
         for item in matches[0:10]:
             ids.append(f'{item["cbx_id"]}, {item["company"]}, {item["address"]}, {item["city"]}, {item["state"]} '
