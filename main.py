@@ -383,11 +383,11 @@ if __name__ == '__main__':
         headers = cbx_data.pop(0)
         headers = [x.lower().strip() for x in headers]
         check_headers(headers, cbx_headers, args.ignore_warnings)
-    for index, row in enumerate(cbx_data):
-        access_modes = row[CBX_ACCESS_MODES].split(';')
-        # only keep contractors on Non-member without any access mode (ignore training and hiring clients)
-        if 'Contractor' not in access_modes and access_modes:
-            cbx_data.pop(index)
+    # for index, row in enumerate(cbx_data):
+    #     access_modes = row[CBX_ACCESS_MODES].split(';')
+    #     # only keep contractors on Non-member without any access mode (ignore training and hiring clients)
+    #     if 'Contractor' not in access_modes and access_modes:
+    #         cbx_data.pop(index)
     print(f'Completed reading {len(cbx_data)} contractors.')
 
     print('Reading hiring client data file...')
@@ -588,9 +588,9 @@ if __name__ == '__main__':
                     contact_match = False
                     if hc_email:
                         if hc_domain in GENERIC_DOMAIN:
-                            contact_match = True if cbx_email.replace(".example.com","") == hc_email else False
+                            contact_match = True if cbx_email == hc_email else False
                         else:
-                            contact_match = True if cbx_domain.replace(".example.com", "") == hc_domain else False
+                            contact_match = True if cbx_domain == hc_domain else False
                     else:
                         contact_match = False
                     cbx_zip = cbx_row[CBX_ZIP].replace(' ', '').upper()
@@ -599,8 +599,8 @@ if __name__ == '__main__':
                     cbx_parents = cbx_row[CBX_PARENTS]
                     cbx_previous = cbx_row[CBX_COMPANY_OLD]
                     cbx_address = cbx_row[CBX_ADDRESS].lower().replace('.', '').strip()
-                    ratio_company_fr = fuzz.token_sort_ratio(cbx_company_fr.replace("CCCBX_", ""), clean_hc_company)
-                    ratio_company_en = fuzz.token_sort_ratio(cbx_company_en.replace("CCCBX_",""), clean_hc_company)
+                    ratio_company_fr = fuzz.token_sort_ratio(cbx_company_fr, clean_hc_company)
+                    ratio_company_en = fuzz.token_sort_ratio(cbx_company_en, clean_hc_company)
                     if cbx_row[CBX_COUNTRY] != hc_row[HC_COUNTRY]:
                         ratio_zip = ratio_address = 0.0
                     else:
