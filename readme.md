@@ -1,4 +1,4 @@
-# Intelligent Contrator Analysis (ICM)
+# Onboarding Analysis Tools (Formerly Intelligent Contrator Analysis (ICM))
 
 Tool to match contractor list provided by hiring clients to business units in CBX
 
