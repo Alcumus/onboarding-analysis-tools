@@ -35,13 +35,13 @@ cd < path to the analysis folder >
 
 $env:token = '<your personal github token to access the repository>'
 
-docker run --rm -it -v ${pwd}:/home/script/data $(docker build -t icm -q https://${env:token}:@github.com/cognibox/icm.git) <cbx_contractor_db_dump.csv> <hc_list.xlsx> <results.xlsx>
+docker run --rm -it -v ${pwd}:/home/script/data $(docker build -t icm -q https://${env:token}:@github.com/Alcumus/onboarding-analysis-tools.git) <cbx_contractor_db_dump.csv> <hc_list.xlsx> <results.xlsx>
 ```
 
 To see the command line tool help use the following:
 
 ```bash
-docker run --rm -it -v  ${pwd}:/home/script/data $(docker build -t icm -q https://${env:token}:@github.com/cognibox/icm.git) -h
+docker run --rm -it -v  ${pwd}:/home/script/data $(docker build -t icm -q https://${env:token}:@github.com/Alcumus/onboarding-analysis-tools.git) -h
 ```
 
 __** Please note that the script doesn't actually support "paths" to the input/output files since it uses a "hack" to map the files into the docker container. Only use filename and make sure they are located where the script is ran from.__
