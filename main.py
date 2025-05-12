@@ -32,13 +32,13 @@ HC_COMPANY, HC_FIRSTNAME, HC_LASTNAME, HC_EMAIL, HC_CONTACT_PHONE, HC_CONTACT_LA
 SUPPORTED_CURRENCIES = ('CAD', 'USD')
 
 assessment_levels = {
-    "gold": 3,
+    "gold": 2,
     "silver": 2,
     "bronze" : 1,
-    "level3": 3, 
+    "level3": 2, 
     "level2": 2,
     "level1": 1,
-    "3":3,
+    "3":2,
     "2":2,
     "1":1
 }
