@@ -110,7 +110,7 @@ BASE_GENERIC_DOMAIN = ['yahoo.ca', 'yahoo.com', 'hotmail.com', 'gmail.com', 'out
 BASE_GENERIC_COMPANY_NAME_WORDS = ['construction', 'contracting', 'industriel', 'industriels', 'service',
                                    'services', 'inc', 'limited', 'ltd', 'ltee', 'ltée', 'co', 'industrial',
                                    'solutions', 'llc', 'enterprises', 'systems', 'industries',
-                                   'technologies', 'company', 'corporation', 'installations', 'enr']
+                                   'technologies', 'company', 'corporation', 'installations', 'enr', 'inc']
 
 
 def chunks(lst, n):
@@ -339,7 +339,52 @@ def clean_company_name(name):
     name = name.lower().replace('.', '').replace(',', '').strip()
     name = re.sub(r"\([^()]*\)", "", name)
     name = remove_generics(name)
-    return name
+    # Remove extra spaces and hyphens, and sort words for order-insensitive comparison
+    name = re.sub(r'[-]', ' ', name)
+    words = sorted(set(name.split()))
+    return ' '.join(words)
+
+def normalize_address(addr):
+    import unicodedata
+    addr = addr.lower()
+    addr = unicodedata.normalize('NFKD', addr)
+    addr = ''.join([c for c in addr if not unicodedata.combining(c)])  # Remove accents
+    addr = re.sub(r'[.,\-]', ' ', addr)  # Remove punctuation and hyphens
+    # Convert French street types/directions to English and handle abbreviations
+    translations = {
+        'chemin': 'road',
+        'rue': 'street',
+        'route': 'road',
+        'boulevard': 'boulevard',
+        'blvd': 'boulevard',
+        'avenue': 'avenue',
+        'place': 'place',
+        'terrasse': 'terrace',
+        'ouest': 'west',
+        'o': 'west',
+        'est': 'east',
+        'e': 'east',
+        'nord': 'north',
+        'n': 'north',
+        'sud': 'south',
+        's': 'south',
+        'appartement': 'apartment',
+        'app': 'apartment',
+        'batiment': 'building',
+        'bâtiment': 'building',
+        'immeuble': 'building',
+        'etage': 'floor',
+        'étage': 'floor',
+        'suite': 'suite',
+        'bureau': 'office',
+    }
+    for fr, en in translations.items():
+        addr = re.sub(rf'\b{fr}\b', en, addr)
+    addr = re.sub(r'\s+', ' ', addr)
+    addr = addr.strip()
+    # Remove duplicate words and sort for order-insensitive comparison
+    words = sorted(set(addr.split()))
+    return ' '.join(words)
 
 
 def parse_assessment_level(level):
@@ -437,44 +482,53 @@ if __name__ == '__main__':
                 exit(-1)
     # checking currency integrity and strip characters from contact phone
     for row in hc_data:
-        if row[HC_COUNTRY].lower().strip() == 'ca':
-            if row[HC_CONTACT_CURRENCY].lower().strip() not in ('cad', ''):
-                print(f'WARNING: currency and country mismatch: {row[HC_CONTACT_CURRENCY]} and'
-                      f' "{row[HC_COUNTRY]}". Expected CAD in row {row}')
-                if not args.ignore_warnings:
-                    exit(-1)
-        elif row[HC_COUNTRY].lower().strip() != '':
-            if row[HC_CONTACT_CURRENCY].lower().strip() not in ('usd', ''):
-                print(f'WARNING: currency and country mismatch: {row[HC_CONTACT_CURRENCY]} and'
-                      f' "{row[HC_COUNTRY]}". Expected USD in row {row}')
-                if not args.ignore_warnings:
-                    exit(-1)
-        row[HC_EMAIL] = str(row[HC_EMAIL]).strip()
-        # correct and normalize phone number
-        extension = ''
-        if isinstance(row[HC_CONTACT_PHONE], str):
-            for x in ('ext', 'x', 'poste', ',', 'p'):
-                f_index = row[HC_CONTACT_PHONE].lower().find(x)
-                if f_index >= 0:
-                    extension = row[HC_CONTACT_PHONE][f_index + len(x):]
-                    row[HC_CONTACT_PHONE] = row[HC_CONTACT_PHONE][0:f_index]
-                    break
-            row[HC_CONTACT_PHONE] = re.sub("[^0-9]", "", row[HC_CONTACT_PHONE])
-        elif isinstance(row[HC_CONTACT_PHONE], int):
-            row[HC_CONTACT_PHONE] = str(row[HC_CONTACT_PHONE])
-        if row[HC_CONTACT_PHONE] and not row[HC_PHONE]:
-            row[HC_PHONE] = row[HC_CONTACT_PHONE]
-            row[HC_EXTENSION] = extension
-        if isinstance(row[HC_EXTENSION], str):
-            row[HC_EXTENSION] = re.sub("[^0-9]", "", row[HC_EXTENSION])
-        # make language lower case; currency, state ISO2 and country ISO2 upper case
-        row[HC_LANGUAGE] = row[HC_LANGUAGE].lower()
-        row[HC_CONTACT_LANGUAGE] = row[HC_CONTACT_LANGUAGE].lower()
-        row[HC_COUNTRY] = row[HC_COUNTRY].upper()
-        row[HC_STATE] = row[HC_STATE].upper()
-        row[HC_CONTACT_CURRENCY] = row[HC_CONTACT_CURRENCY].upper()
-        # convert date-time to windows format
-        row[HC_CONTACT_TIMEZONE] = convertFromIANATimezone(row[HC_CONTACT_TIMEZONE])
+            # Ignore extra columns: only process expected columns, leave extras untouched
+            # Trim whitespace from all fields
+            row = [str(cell).strip() if cell is not None else '' for cell in row]
+            # Ensure company name and address are UTF-8 encoded and normalized
+            if row[HC_COMPANY]:
+                row[HC_COMPANY] = row[HC_COMPANY].encode('utf-8', errors='ignore').decode('utf-8')
+            if row[HC_STREET]:
+                row[HC_STREET] = row[HC_STREET].encode('utf-8', errors='ignore').decode('utf-8')
+            # Existing normalization logic
+            if row[HC_COUNTRY].lower().strip() == 'ca':
+                if row[HC_CONTACT_CURRENCY].lower().strip() not in ('cad', ''):
+                    print(f'WARNING: currency and country mismatch: {row[HC_CONTACT_CURRENCY]} and'
+                          f' "{row[HC_COUNTRY]}". Expected CAD in row {row}')
+                    if not args.ignore_warnings:
+                        exit(-1)
+            elif row[HC_COUNTRY].lower().strip() != '':
+                if row[HC_CONTACT_CURRENCY].lower().strip() not in ('usd', ''):
+                    print(f'WARNING: currency and country mismatch: {row[HC_CONTACT_CURRENCY]} and'
+                          f' "{row[HC_COUNTRY]}". Expected USD in row {row}')
+                    if not args.ignore_warnings:
+                        exit(-1)
+            row[HC_EMAIL] = str(row[HC_EMAIL]).strip()
+            # correct and normalize phone number
+            extension = ''
+            if isinstance(row[HC_CONTACT_PHONE], str):
+                for x in ('ext', 'x', 'poste', ',', 'p'):
+                    f_index = row[HC_CONTACT_PHONE].lower().find(x)
+                    if f_index >= 0:
+                        extension = row[HC_CONTACT_PHONE][f_index + len(x):]
+                        row[HC_CONTACT_PHONE] = row[HC_CONTACT_PHONE][0:f_index]
+                        break
+                row[HC_CONTACT_PHONE] = re.sub("[^0-9]", "", row[HC_CONTACT_PHONE])
+            elif isinstance(row[HC_CONTACT_PHONE], int):
+                row[HC_CONTACT_PHONE] = str(row[HC_CONTACT_PHONE])
+            if row[HC_CONTACT_PHONE] and not row[HC_PHONE]:
+                row[HC_PHONE] = row[HC_CONTACT_PHONE]
+                row[HC_EXTENSION] = extension
+            if isinstance(row[HC_EXTENSION], str):
+                row[HC_EXTENSION] = re.sub("[^0-9]", "", row[HC_EXTENSION])
+            # make language lower case; currency, state ISO2 and country ISO2 upper case
+            row[HC_LANGUAGE] = row[HC_LANGUAGE].lower()
+            row[HC_CONTACT_LANGUAGE] = row[HC_CONTACT_LANGUAGE].lower()
+            row[HC_COUNTRY] = row[HC_COUNTRY].upper()
+            row[HC_STATE] = row[HC_STATE].upper()
+            row[HC_CONTACT_CURRENCY] = row[HC_CONTACT_CURRENCY].upper()
+            # convert date-time to windows format
+            row[HC_CONTACT_TIMEZONE] = convertFromIANATimezone(row[HC_CONTACT_TIMEZONE])
     print(f'Completed reading {len(hc_data)} contractors.')
     print(f'Starting data analysis...')
 
@@ -598,16 +652,25 @@ if __name__ == '__main__':
                     cbx_company_fr = clean_company_name(cbx_row[CBX_COMPANY_FR])
                     cbx_parents = cbx_row[CBX_PARENTS]
                     cbx_previous = cbx_row[CBX_COMPANY_OLD]
-                    cbx_address = cbx_row[CBX_ADDRESS].lower().replace('.', '').strip()
+                    cbx_address = normalize_address(cbx_row[CBX_ADDRESS])
+                    hc_address_norm = normalize_address(hc_address)
+                    # Partial word overlap logic for company name
+                    hc_words = set(clean_hc_company.split())
+                    cbx_words_fr = set(cbx_company_fr.split())
+                    cbx_words_en = set(cbx_company_en.split())
+                    partial_match_fr = len(hc_words & cbx_words_fr) / max(1, len(hc_words))
+                    partial_match_en = len(hc_words & cbx_words_en) / max(1, len(hc_words))
+                    partial_match = max(partial_match_fr, partial_match_en)
                     ratio_company_fr = fuzz.token_sort_ratio(cbx_company_fr, clean_hc_company)
                     ratio_company_en = fuzz.token_sort_ratio(cbx_company_en, clean_hc_company)
                     if cbx_row[CBX_COUNTRY] != hc_row[HC_COUNTRY]:
                         ratio_zip = ratio_address = 0.0
                     else:
                         ratio_zip = fuzz.ratio(cbx_zip, hc_zip)
-                        ratio_address = fuzz.token_sort_ratio(cbx_address, hc_address)
-                        ratio_address = ratio_address if ratio_zip == 0 else ratio_zip if ratio_address == 0 \
-                            else ratio_address * ratio_zip / 100
+                        ratio_address = fuzz.token_sort_ratio(cbx_address, hc_address_norm)
+                        # If street and zip match well, ignore city difference
+                        if ratio_address >= 90 and ratio_zip >= 90:
+                            ratio_address = 100.0
                     ratio_company = ratio_company_fr if ratio_company_fr > ratio_company_en else ratio_company_en
                     ratio_previous = 0
                     for item in cbx_previous.split(args.list_separator):
@@ -617,7 +680,8 @@ if __name__ == '__main__':
                         ratio = fuzz.token_sort_ratio(item, clean_hc_company)
                         ratio_previous = ratio if ratio > ratio_previous else ratio_previous
                     ratio_company = ratio_previous if ratio_previous > ratio_company else ratio_company
-                    if (contact_match or (ratio_company >= float(args.ratio_company)
+                    # Accept match if partial word overlap is high
+                    if (contact_match or partial_match >= 0.5 or (ratio_company >= float(args.ratio_company)
                                           and ratio_address >= float(args.ratio_address))):
                         matches.append(
                             add_analysis_data(hc_row, cbx_row, ratio_company, ratio_address, contact_match))
