@@ -437,44 +437,53 @@ if __name__ == '__main__':
                 exit(-1)
     # checking currency integrity and strip characters from contact phone
     for row in hc_data:
-        if row[HC_COUNTRY].lower().strip() == 'ca':
-            if row[HC_CONTACT_CURRENCY].lower().strip() not in ('cad', ''):
-                print(f'WARNING: currency and country mismatch: {row[HC_CONTACT_CURRENCY]} and'
-                      f' "{row[HC_COUNTRY]}". Expected CAD in row {row}')
-                if not args.ignore_warnings:
-                    exit(-1)
-        elif row[HC_COUNTRY].lower().strip() != '':
-            if row[HC_CONTACT_CURRENCY].lower().strip() not in ('usd', ''):
-                print(f'WARNING: currency and country mismatch: {row[HC_CONTACT_CURRENCY]} and'
-                      f' "{row[HC_COUNTRY]}". Expected USD in row {row}')
-                if not args.ignore_warnings:
-                    exit(-1)
-        row[HC_EMAIL] = str(row[HC_EMAIL]).strip()
-        # correct and normalize phone number
-        extension = ''
-        if isinstance(row[HC_CONTACT_PHONE], str):
-            for x in ('ext', 'x', 'poste', ',', 'p'):
-                f_index = row[HC_CONTACT_PHONE].lower().find(x)
-                if f_index >= 0:
-                    extension = row[HC_CONTACT_PHONE][f_index + len(x):]
-                    row[HC_CONTACT_PHONE] = row[HC_CONTACT_PHONE][0:f_index]
-                    break
-            row[HC_CONTACT_PHONE] = re.sub("[^0-9]", "", row[HC_CONTACT_PHONE])
-        elif isinstance(row[HC_CONTACT_PHONE], int):
-            row[HC_CONTACT_PHONE] = str(row[HC_CONTACT_PHONE])
-        if row[HC_CONTACT_PHONE] and not row[HC_PHONE]:
-            row[HC_PHONE] = row[HC_CONTACT_PHONE]
-            row[HC_EXTENSION] = extension
-        if isinstance(row[HC_EXTENSION], str):
-            row[HC_EXTENSION] = re.sub("[^0-9]", "", row[HC_EXTENSION])
-        # make language lower case; currency, state ISO2 and country ISO2 upper case
-        row[HC_LANGUAGE] = row[HC_LANGUAGE].lower()
-        row[HC_CONTACT_LANGUAGE] = row[HC_CONTACT_LANGUAGE].lower()
-        row[HC_COUNTRY] = row[HC_COUNTRY].upper()
-        row[HC_STATE] = row[HC_STATE].upper()
-        row[HC_CONTACT_CURRENCY] = row[HC_CONTACT_CURRENCY].upper()
-        # convert date-time to windows format
-        row[HC_CONTACT_TIMEZONE] = convertFromIANATimezone(row[HC_CONTACT_TIMEZONE])
+            # Ignore extra columns: only process expected columns, leave extras untouched
+            # Trim whitespace from all fields
+            row = [str(cell).strip() if cell is not None else '' for cell in row]
+            # Ensure company name and address are UTF-8 encoded and normalized
+            if row[HC_COMPANY]:
+                row[HC_COMPANY] = row[HC_COMPANY].encode('utf-8', errors='ignore').decode('utf-8')
+            if row[HC_STREET]:
+                row[HC_STREET] = row[HC_STREET].encode('utf-8', errors='ignore').decode('utf-8')
+            # Existing normalization logic
+            if row[HC_COUNTRY].lower().strip() == 'ca':
+                if row[HC_CONTACT_CURRENCY].lower().strip() not in ('cad', ''):
+                    print(f'WARNING: currency and country mismatch: {row[HC_CONTACT_CURRENCY]} and'
+                          f' "{row[HC_COUNTRY]}". Expected CAD in row {row}')
+                    if not args.ignore_warnings:
+                        exit(-1)
+            elif row[HC_COUNTRY].lower().strip() != '':
+                if row[HC_CONTACT_CURRENCY].lower().strip() not in ('usd', ''):
+                    print(f'WARNING: currency and country mismatch: {row[HC_CONTACT_CURRENCY]} and'
+                          f' "{row[HC_COUNTRY]}". Expected USD in row {row}')
+                    if not args.ignore_warnings:
+                        exit(-1)
+            row[HC_EMAIL] = str(row[HC_EMAIL]).strip()
+            # correct and normalize phone number
+            extension = ''
+            if isinstance(row[HC_CONTACT_PHONE], str):
+                for x in ('ext', 'x', 'poste', ',', 'p'):
+                    f_index = row[HC_CONTACT_PHONE].lower().find(x)
+                    if f_index >= 0:
+                        extension = row[HC_CONTACT_PHONE][f_index + len(x):]
+                        row[HC_CONTACT_PHONE] = row[HC_CONTACT_PHONE][0:f_index]
+                        break
+                row[HC_CONTACT_PHONE] = re.sub("[^0-9]", "", row[HC_CONTACT_PHONE])
+            elif isinstance(row[HC_CONTACT_PHONE], int):
+                row[HC_CONTACT_PHONE] = str(row[HC_CONTACT_PHONE])
+            if row[HC_CONTACT_PHONE] and not row[HC_PHONE]:
+                row[HC_PHONE] = row[HC_CONTACT_PHONE]
+                row[HC_EXTENSION] = extension
+            if isinstance(row[HC_EXTENSION], str):
+                row[HC_EXTENSION] = re.sub("[^0-9]", "", row[HC_EXTENSION])
+            # make language lower case; currency, state ISO2 and country ISO2 upper case
+            row[HC_LANGUAGE] = row[HC_LANGUAGE].lower()
+            row[HC_CONTACT_LANGUAGE] = row[HC_CONTACT_LANGUAGE].lower()
+            row[HC_COUNTRY] = row[HC_COUNTRY].upper()
+            row[HC_STATE] = row[HC_STATE].upper()
+            row[HC_CONTACT_CURRENCY] = row[HC_CONTACT_CURRENCY].upper()
+            # convert date-time to windows format
+            row[HC_CONTACT_TIMEZONE] = convertFromIANATimezone(row[HC_CONTACT_TIMEZONE])
     print(f'Completed reading {len(hc_data)} contractors.')
     print(f'Starting data analysis...')
 
