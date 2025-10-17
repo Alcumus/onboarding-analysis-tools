@@ -27,7 +27,7 @@ WORKDIR $HOME
 
 # copy project
 COPY . $HOME
-RUN mkdir $HOME/data
+RUN mkdir -p $HOME/data
 RUN chown -R script:script $HOME
 VOLUME $HOME/data
 # chown all the files to the app user

@@ -38,6 +38,16 @@ $env:token = '<your personal github token to access the repository>'
 docker run --rm -it -v ${pwd}:/home/script/data $(docker build -t icm -q https://${env:token}:@github.com/Alcumus/onboarding-analysis-tools.git) <cbx_contractor_db_dump.csv> <hc_list.xlsx> <results.xlsx>
 ```
 
+To run it locally for debugging (On Mac)
+```bash
+docker build -t onboarding-analysis-tools . && docker run --rm -v $(pwd)/data:/home/script/data onboarding-analysis-tools <cbx_contractor_db_dump.csv> <hc_list.xlsx> <results.xlsx>
+```
+
+To run it locally for debugging (On Windows)
+```bash
+docker build -t onboarding-analysis-tools . && docker run --rm -v ${pwd}/data:/home/script/data onboarding-analysis-tools <cbx_contractor_db_dump.csv> <hc_list.xlsx> <results.xlsx>
+```
+
 To see the command line tool help use the following:
 
 ```bash
