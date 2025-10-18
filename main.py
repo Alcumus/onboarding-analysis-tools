@@ -426,6 +426,19 @@ def core_mandatory_provided(hcd):
 
 # noinspection PyShadowingNames
 def action(hc_data, cbx_data, create, subscription_update, expiration_date, is_qualified, ignore):
+    # FINAL CORRECTED BUSINESS LOGIC: missing_info check comes FIRST
+    # Rule: If HC data is incomplete, return missing_info regardless of CBX match status
+    # Only proceed with business logic if HC data is complete enough for processing
+    
+    # Check if this is a new contractor creation case
+    if create and not core_mandatory_provided(hc_data):
+        return 'missing_info'
+    
+    # If HC data is complete (or this is an existing contractor), proceed with CBX-based business logic
+    
+    # Only proceed with business logic if HC data is complete
+    has_cbx_match = cbx_data is not None
+    
     # Check for association fee first, regardless of create status
     if hc_data[HC_IS_ASSOCIATION_FEE] and cbx_data:
         reg_status = cbx_data.get('registration_status')
@@ -460,6 +473,7 @@ def action(hc_data, cbx_data, create, subscription_update, expiration_date, is_q
             elif core_mandatory_provided(hc_data):
                 return 'onboarding'
             else:
+                # Should not reach here due to earlier missing_info check, but keep as fallback
                 return 'missing_info'
     else:
         reg_status = cbx_data['registration_status']
@@ -532,8 +546,15 @@ def clean_company_name(name):
     name = re.sub(r'\s+', ' ', name)
     # Remove generic legal suffixes AND common filler words that don't help matching
     words = [w for w in name.split() if w not in ('inc', 'ltd', 'ltée', 'ltee', 'co', 'corp', 'corporation', 'company', 'llc', 'sarl', 'sa', 'plc', 'enr', 'industriel', 'industriels', 'services', 'service', 'solutions', 'systems', 'technologies', 'installations')]
-    words = sorted(set(words))
-    return ' '.join(words)
+    # MATCHING FIX: Preserve word order instead of sorting alphabetically - word order is crucial for fuzzy matching
+    # Remove duplicates while preserving order
+    seen = set()
+    words_ordered = []
+    for word in words:
+        if word not in seen:
+            seen.add(word)
+            words_ordered.append(word)
+    return ' '.join(words_ordered).strip()
     if not clean_name:
         return cbx_data
     
