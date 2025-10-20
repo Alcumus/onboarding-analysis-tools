@@ -1,5 +1,5 @@
 # pull official base image
-FROM python:3.9.7-slim
+FROM python:3.9-slim
 
 # set work directory
 WORKDIR /usr/src/
@@ -8,7 +8,7 @@ WORKDIR /usr/src/
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-RUN apt --yes update && apt --yes upgrade && apt-get --yes install netcat
+RUN apt-get update && apt-get install -y netcat-traditional
 
 # install dependencies
 RUN pip install --no-cache-dir --upgrade pip

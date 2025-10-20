@@ -341,7 +341,7 @@ def smart_boolean(bool_data):
 
 
 # noinspection PyShadowingNames
-def add_analysis_data(hc_row, cbx_row, analysis_string=''):
+def add_analysis_data(hc_row, cbx_row, analysis_string='', ratio_company=0, ratio_address=0, contact_match=False):
     cbx_company = cbx_row[CBX_COMPANY_FR] if cbx_row[CBX_COMPANY_FR] else cbx_row[CBX_COMPANY_EN]
     # print debug removed, hc_email not defined here
     # Parse hiring client data with improved fuzzy matching and data quality fixes
@@ -941,173 +941,266 @@ if __name__ == '__main__':
     for index, hc_row in enumerate(hc_data):
         print(f"Processing {index+1}/{len(hc_data)}: {hc_row[HC_COMPANY]}")
         
-        hc_company = hc_row[HC_COMPANY]
-        clean_hc_company = clean_company_name(hc_company)
-        hc_zip = normalize_postal_code(hc_row[HC_ZIP])
-        
-        hc_address = str(hc_row[HC_STREET]).lower().replace('.', '').replace(',', '').replace('north', 'n').replace('south', 's').replace('east', 'e').replace('west', 'w').replace('  ', ' ').strip()
-        hc_address_norm = normalize_address(hc_address)
-        suite_keywords = ['suite', 'bureau', 'office']
-        hc_suite = [w for w in hc_address_norm.split() if w in suite_keywords]
-        candidates = []
+        # Initialize variables for this iteration
+        best_match = None
         analysis_string = ''
-        best_name_score = -1
-        for cbx_row in cbx_data:
-            cbx_company_en = clean_company_name(cbx_row[CBX_COMPANY_EN])
-            cbx_company_fr = clean_company_name(cbx_row[CBX_COMPANY_FR])
-            ratio_company_fr = max(
-                fuzz.token_sort_ratio(cbx_company_fr, clean_hc_company),
-                fuzz.partial_ratio(cbx_company_fr, clean_hc_company),
-                fuzz.token_set_ratio(cbx_company_fr, clean_hc_company)
-            )
-            ratio_company_en = max(
-                fuzz.token_sort_ratio(cbx_company_en, clean_hc_company),
-                fuzz.partial_ratio(cbx_company_en, clean_hc_company),
-                fuzz.token_set_ratio(cbx_company_en, clean_hc_company)
-            )
-            ratio_company = max(ratio_company_fr, ratio_company_en)
-            cbx_zip = normalize_postal_code(cbx_row[CBX_ZIP])
-            cbx_address = normalize_address(cbx_row[CBX_ADDRESS])
-            cbx_suite = [w for w in cbx_address.split() if w in suite_keywords]
-            ratio_address = max(
-                fuzz.token_sort_ratio(cbx_address, hc_address_norm),
-                fuzz.partial_ratio(cbx_address, hc_address_norm),
-                fuzz.token_set_ratio(cbx_address, hc_address_norm)
-            )
-            zip_match_strict = hc_zip and cbx_zip and hc_zip == cbx_zip
-            suite_match_strict = hc_suite and cbx_suite and bool(set(hc_suite) & set(cbx_suite))
-            address_threshold = min(float(args.ratio_address), 80)
-            address_match = ratio_address >= address_threshold
-            name_substring = clean_hc_company.lower() in cbx_company_en.lower() or clean_hc_company.lower() in cbx_company_fr.lower() or cbx_company_en.lower() in clean_hc_company.lower() or cbx_company_fr.lower() in clean_hc_company.lower()
-            # Also check old names
-            cbx_old_names = clean_company_name(cbx_row[CBX_COMPANY_OLD]) if cbx_row[CBX_COMPANY_OLD] else ''
-            if cbx_old_names:
-                ratio_company_old = max(
-                    fuzz.token_sort_ratio(cbx_old_names, clean_hc_company),
-                    fuzz.partial_ratio(cbx_old_names, clean_hc_company),
-                    fuzz.token_set_ratio(cbx_old_names, clean_hc_company)
-                )
-                ratio_company = max(ratio_company, ratio_company_old)
-                name_substring = name_substring or clean_hc_company.lower() in cbx_old_names.lower() or cbx_old_names.lower() in clean_hc_company.lower()
-            if (ratio_company >= float(args.ratio_company) or name_substring):
-                hiring_clients_list = cbx_row[CBX_HIRING_CLIENT_NAMES].split(args.list_separator) if cbx_row[CBX_HIRING_CLIENT_NAMES] else []
-                hc_count = len(hiring_clients_list)
-                contact_match = hc_row[HC_EMAIL] == cbx_row[CBX_EMAIL] and hc_row[HC_FIRSTNAME].lower() == cbx_row[CBX_FISTNAME].lower() and hc_row[HC_LASTNAME].lower() == cbx_row[CBX_LASTNAME].lower()
-                
-                # Calculate business value factors
-                module_count = len(cbx_row[CBX_MODULES].split(';')) if cbx_row[CBX_MODULES] and cbx_row[CBX_MODULES].strip() else 0
-                
-                # Calculate location proximity bonus (including country matching/penalties)
-                location_bonus = calculate_location_bonus(
-                    hc_row[HC_STREET], hc_row[HC_CITY], hc_row[HC_STATE],
-                    cbx_row[CBX_ADDRESS], cbx_row[CBX_CITY], cbx_row[CBX_STATE],
-                    hc_row[HC_COUNTRY], cbx_row[CBX_COUNTRY]
-                )
-                
-                # Calculate business quality score (higher is better)
-                # FIXED: Reduced HC count weight from 2 to 0.5 to prevent high-volume contractors from dominating selection
-                # Prioritize verification and location accuracy over business volume
-                business_score = (
-                    module_count * 3 +                      # Modules: 3 points each (reduced from 5, qualification breadth)
-                    min(hc_count * 0.5, 5) +               # Hiring clients: 0.5 points each, capped at 5 total (reduced dominance)
-                    (30 if contact_match else 0) +         # Contact match: 30 point bonus (increased from 20, verification priority)
-                    (25 if zip_match_strict else 0) +      # Postal code match: 25 point bonus (increased from 10, location accuracy)
-                    (15 if suite_match_strict else 0) +    # Suite match: 15 point bonus (increased from 5, address precision)
-                    location_bonus * 2                     # Location proximity: doubled weight for geographical relevance
-                )
-                
-                candidates.append({
-                    'cbx_row': cbx_row,
-                    'name_score': ratio_company,
-                    'address_score': ratio_address,
-                    'business_score': business_score,
-                    'module_count': module_count,
-                    'hc_count': hc_count,
-                    'contact_match': contact_match,
-                    'location_bonus': location_bonus,
-                    'zip': cbx_zip,
-                    'suite': cbx_suite,
-                    'zip_match_strict': zip_match_strict,
-                    'suite_match_strict': suite_match_strict
-                })
-                if ratio_company >= 50 or ratio_address >= 50 or name_substring:
-                    # Only include very close matches in analysis (90%+ company match)
-                    # Also ensure CBX entry has meaningful data (not mostly empty)
-                    cbx_company = cbx_row[CBX_COMPANY_EN] or cbx_row[CBX_COMPANY_FR] or ""
-                    cbx_has_meaningful_data = (
-                        cbx_company.strip() and len(cbx_company.strip()) > 2 and  # Company name exists and is not too short
-                        cbx_company.lower().strip() not in ('main department', 'ontario', 'montreal', 'ver', '')  # Filter out generic entries
-                    ) or (
-                        cbx_row[CBX_ADDRESS] or cbx_row[CBX_EMAIL] or cbx_row[CBX_FISTNAME]  # Has address or contact info
-                    )
-                    if ratio_company >= 70 and cbx_has_meaningful_data:
-                        analysis_string += f"{cbx_row[CBX_ID]}, {cbx_row[CBX_COMPANY_EN]}, {cbx_row[CBX_ADDRESS]}, {cbx_row[CBX_CITY]}, {cbx_row[CBX_STATE]}, {cbx_row[CBX_ZIP]}, {cbx_row[CBX_COUNTRY]}, {cbx_row[CBX_EMAIL]}, {cbx_row[CBX_FISTNAME]} {cbx_row[CBX_LASTNAME]} --> CR{ratio_company}, AR{ratio_address}, CM{contact_match}, HCC{hc_count}, M[{cbx_row[CBX_MODULES]}]\n"
-                if ratio_company > best_name_score:
-                    best_name_score = ratio_company
-        # Enhanced priority-based selection with business logic
+        is_ambiguous = False
         selected_candidate = None
+        best_ratio_company = 0
+        best_ratio_address = 0
         
-        if candidates:
-            # Only consider candidates that meet analysis threshold (company >= 70 and meaningful data)
-            eligible_candidates = [c for c in candidates if c['name_score'] >= 70]
+        # CRITICAL: Check HC_DO_NOT_MATCH flag - if True, don't match but mark as missing_info
+        if smart_boolean(hc_row[HC_DO_NOT_MATCH]):
+            print(f"  -> HC_DO_NOT_MATCH flag set - marking as missing_info without matching")
             
-            if eligible_candidates:
-                # Priority 1: Perfect company name matches (>=95) - prioritize relationships first
-                perfect_matches = [c for c in eligible_candidates if c['name_score'] >= 95]
-                if perfect_matches:
-                    # FIXED: Prioritize hiring client relationships above all else, then verification and location
-                    # Sort by: hc_count (relationship depth), contact_match, zip_match, address_score, business_score
-                    perfect_matches = sorted(perfect_matches, key=lambda c: (
-                        c['hc_count'] > 0,            # Relationship exists (True > False)
-                        c['hc_count'],                # Relationship depth (more clients = stronger relationship)
-                        c['contact_match'],           # Contact verification 
-                        c['zip_match_strict'],        # Postal code accuracy
-                        c['address_score'],           # Address similarity
-                        c['business_score'],          # Business factors
-                        c['name_score']               # Name score
-                    ), reverse=True)
-                    selected_candidate = perfect_matches[0]
-                else:
-                    # Priority 2: High company name matches (>=90) - prioritize relationships
-                    high_company_matches = [c for c in eligible_candidates if c['name_score'] >= 90]
-                    if high_company_matches:
-                        # FIXED: Prioritize relationships even for high matches
-                        high_company_matches = sorted(high_company_matches, key=lambda c: (
-                            c['hc_count'] > 0,        # Relationship exists
-                            c['hc_count'],            # Relationship depth
-                            c['contact_match'],       # Contact verification
-                            c['business_score'],      # Business factors
-                            c['name_score'],          # Company match quality
-                            c['address_score']        # Address match quality
-                        ), reverse=True)
-                        selected_candidate = high_company_matches[0]
-                    else:
-                        # Priority 3: Good matches (>=70) with postal code - business factors + location accuracy
-                        good_company_postal = [c for c in eligible_candidates if c['name_score'] >= 70 and hc_zip and c['zip'] == hc_zip]
-                        if good_company_postal:
-                            # Location + business factors for good matches
-                            good_company_postal = sorted(good_company_postal, key=lambda c: (c['business_score'], c['name_score'], c['address_score']), reverse=True)
-                            selected_candidate = good_company_postal[0]
-                        else:
-                            # Priority 4: Best overall combination - relationship-first approach
-                            # FIXED: Always prioritize relationship depth, then combined scoring
-                            for candidate in eligible_candidates:
-                                # Enhanced scoring that heavily weighs relationships
-                                relationship_bonus = candidate['hc_count'] * 20  # 20 points per hiring client relationship
-                                candidate['combined_score'] = (
-                                    relationship_bonus +                    # Relationship depth (20 points per client)
-                                    candidate['name_score'] * 0.3 +        # Company match (30%)
-                                    candidate['business_score'] * 0.3 +     # Business factors (30%) 
-                                    candidate['address_score'] * 0.2        # Address match (20%)
-                                )
-                            combo_candidates = sorted(eligible_candidates, key=lambda c: (
-                                c['hc_count'] > 0,        # Relationship exists (boolean priority)
-                                c['combined_score']       # Then combined score
-                            ), reverse=True)
-                            selected_candidate = combo_candidates[0]
+            # Force missing_info for HC_DO_NOT_MATCH (based on baseline analysis)
+            wave = 'missing_info'
+            
+            # Build output row with empty analysis columns
+            output_row = hc_row[:HC_HEADER_LENGTH]
+            for _ in analysis_headers:
+                output_row.append('')
+            
+            # Set action and index with safe column access
+            if 'action' in analysis_headers:
+                output_row[HC_HEADER_LENGTH + analysis_headers.index('action')] = wave
+            if 'index' in analysis_headers:
+                output_row[HC_HEADER_LENGTH + analysis_headers.index('index')] = index + 1
         
-        # Extract best match data
-        if selected_candidate:
+            # Add metadata columns if they exist
+            if metadata_indexes:
+                metadata_array = []
+                for md_index in metadata_indexes:
+                    metadata_array.insert(0, hc_row[md_index])
+                output_row += metadata_array
+
+            # Save the processed row and continue to next contractor
+            hc_data[index] = output_row
+            out_ws.append(output_row)
+            continue
+        
+        # PRIORITY CHECK: Handle force_cbx_id first (manual override)
+        force_cbx_id = None
+        if hc_row[HC_FORCE_CBX_ID] and str(hc_row[HC_FORCE_CBX_ID]).strip() not in ('', 'nan', 'None'):
+            try:
+                force_cbx_id = int(float(str(hc_row[HC_FORCE_CBX_ID]).strip()))
+                print(f"  -> Force CBX ID specified: {force_cbx_id}")
+            except (ValueError, TypeError):
+                print(f"  -> Invalid force_cbx_id value: {hc_row[HC_FORCE_CBX_ID]}")
+                force_cbx_id = None
+        
+        # If force_cbx_id is specified, find that specific CBX contractor
+        if force_cbx_id:
+            forced_match = None
+            for cbx_row in cbx_data:
+                # Convert CBX_ID to int for comparison (CSV data is loaded as strings)
+                try:
+                    cbx_id = int(cbx_row[CBX_ID])
+                    if cbx_id == force_cbx_id:
+                        forced_match = cbx_row
+                        break
+                except (ValueError, TypeError):
+                    continue  # Skip invalid CBX_ID entries
+            
+            if forced_match:
+                print(f"  -> Found forced CBX match: {forced_match[CBX_COMPANY_EN]} (ID: {force_cbx_id})")
+                # Use forced match and skip fuzzy matching
+                best_match = forced_match
+                analysis_string = f"FORCED MATCH: CBX ID {force_cbx_id} - {forced_match[CBX_COMPANY_EN]}\n"
+                is_ambiguous = smart_boolean(hc_row[HC_AMBIGUOUS])
+                # Set selected_candidate and ratio values for forced matches
+                selected_candidate = {
+                    'match': forced_match,
+                    'name_score': 100,  # Perfect match since it was forced
+                    'address_score': 100,
+                    'contact_match': False
+                }
+                best_ratio_company = 100  # Perfect match since it was forced
+                best_ratio_address = 100
+            else:
+                print(f"  -> WARNING: Forced CBX ID {force_cbx_id} not found in CBX database")
+                best_match = None
+                analysis_string = f"FORCED MATCH FAILED: CBX ID {force_cbx_id} not found\n"
+                is_ambiguous = False
+                selected_candidate = None
+                best_ratio_company = 0
+                best_ratio_address = 0
+        else:
+            # No forced ID - proceed with normal fuzzy matching
+            hc_company = hc_row[HC_COMPANY]
+            clean_hc_company = clean_company_name(hc_company)
+            hc_zip = normalize_postal_code(hc_row[HC_ZIP])
+            
+            hc_address = str(hc_row[HC_STREET]).lower().replace('.', '').replace(',', '').replace('north', 'n').replace('south', 's').replace('east', 'e').replace('west', 'w').replace('  ', ' ').strip()
+            hc_address_norm = normalize_address(hc_address)
+            suite_keywords = ['suite', 'bureau', 'office']
+            hc_suite = [w for w in hc_address_norm.split() if w in suite_keywords]
+            candidates = []
+            analysis_string = ''
+            best_name_score = -1
+            
+            # Fuzzy matching loop (only when no forced match)
+            for cbx_row in cbx_data:
+                cbx_company_en = clean_company_name(cbx_row[CBX_COMPANY_EN])
+                cbx_company_fr = clean_company_name(cbx_row[CBX_COMPANY_FR])
+                ratio_company_fr = max(
+                    fuzz.token_sort_ratio(cbx_company_fr, clean_hc_company),
+                    fuzz.partial_ratio(cbx_company_fr, clean_hc_company),
+                    fuzz.token_set_ratio(cbx_company_fr, clean_hc_company)
+                )
+                ratio_company_en = max(
+                    fuzz.token_sort_ratio(cbx_company_en, clean_hc_company),
+                    fuzz.partial_ratio(cbx_company_en, clean_hc_company),
+                    fuzz.token_set_ratio(cbx_company_en, clean_hc_company)
+                )
+                ratio_company = max(ratio_company_fr, ratio_company_en)
+                cbx_zip = normalize_postal_code(cbx_row[CBX_ZIP])
+                cbx_address = normalize_address(cbx_row[CBX_ADDRESS])
+                cbx_suite = [w for w in cbx_address.split() if w in suite_keywords]
+                ratio_address = max(
+                    fuzz.token_sort_ratio(cbx_address, hc_address_norm),
+                    fuzz.partial_ratio(cbx_address, hc_address_norm),
+                    fuzz.token_set_ratio(cbx_address, hc_address_norm)
+                )
+                zip_match_strict = hc_zip and cbx_zip and hc_zip == cbx_zip
+                suite_match_strict = hc_suite and cbx_suite and bool(set(hc_suite) & set(cbx_suite))
+                address_threshold = min(float(args.ratio_address), 80)
+                address_match = ratio_address >= address_threshold
+                name_substring = clean_hc_company.lower() in cbx_company_en.lower() or clean_hc_company.lower() in cbx_company_fr.lower() or cbx_company_en.lower() in clean_hc_company.lower() or cbx_company_fr.lower() in clean_hc_company.lower()
+                # Also check old names
+                cbx_old_names = clean_company_name(cbx_row[CBX_COMPANY_OLD]) if cbx_row[CBX_COMPANY_OLD] else ''
+                if cbx_old_names:
+                    ratio_company_old = max(
+                        fuzz.token_sort_ratio(cbx_old_names, clean_hc_company),
+                        fuzz.partial_ratio(cbx_old_names, clean_hc_company),
+                        fuzz.token_set_ratio(cbx_old_names, clean_hc_company)
+                    )
+                    ratio_company = max(ratio_company, ratio_company_old)
+                    name_substring = name_substring or clean_hc_company.lower() in cbx_old_names.lower() or cbx_old_names.lower() in clean_hc_company.lower()
+                if (ratio_company >= float(args.ratio_company) or name_substring):
+                    hiring_clients_list = cbx_row[CBX_HIRING_CLIENT_NAMES].split(args.list_separator) if cbx_row[CBX_HIRING_CLIENT_NAMES] else []
+                    hc_count = len(hiring_clients_list)
+                    contact_match = hc_row[HC_EMAIL] == cbx_row[CBX_EMAIL] and hc_row[HC_FIRSTNAME].lower() == cbx_row[CBX_FISTNAME].lower() and hc_row[HC_LASTNAME].lower() == cbx_row[CBX_LASTNAME].lower()
+                    
+                    # Calculate business value factors
+                    module_count = len(cbx_row[CBX_MODULES].split(';')) if cbx_row[CBX_MODULES] and cbx_row[CBX_MODULES].strip() else 0
+                    
+                    # Calculate location proximity bonus (including country matching/penalties)
+                    location_bonus = calculate_location_bonus(
+                        hc_row[HC_STREET], hc_row[HC_CITY], hc_row[HC_STATE],
+                        cbx_row[CBX_ADDRESS], cbx_row[CBX_CITY], cbx_row[CBX_STATE],
+                        hc_row[HC_COUNTRY], cbx_row[CBX_COUNTRY]
+                    )
+                    
+                    # Calculate business quality score (higher is better)
+                    # FIXED: Reduced HC count weight from 2 to 0.5 to prevent high-volume contractors from dominating selection
+                    # Prioritize verification and location accuracy over business volume
+                    business_score = (
+                        module_count * 3 +                      # Modules: 3 points each (reduced from 5, qualification breadth)
+                        min(hc_count * 0.5, 5) +               # Hiring clients: 0.5 points each, capped at 5 total (reduced dominance)
+                        (30 if contact_match else 0) +         # Contact match: 30 point bonus (increased from 20, verification priority)
+                        (25 if zip_match_strict else 0) +      # Postal code match: 25 point bonus (increased from 10, location accuracy)
+                        (15 if suite_match_strict else 0) +    # Suite match: 15 point bonus (increased from 5, address precision)
+                        location_bonus * 2                     # Location proximity: doubled weight for geographical relevance
+                    )
+                    
+                    candidates.append({
+                        'cbx_row': cbx_row,
+                        'name_score': ratio_company,
+                        'address_score': ratio_address,
+                        'business_score': business_score,
+                        'module_count': module_count,
+                        'hc_count': hc_count,
+                        'contact_match': contact_match,
+                        'location_bonus': location_bonus,
+                        'zip': cbx_zip,
+                        'suite': cbx_suite,
+                        'zip_match_strict': zip_match_strict,
+                        'suite_match_strict': suite_match_strict
+                    })
+                    if ratio_company >= 50 or ratio_address >= 50 or name_substring:
+                        # Only include very close matches in analysis (90%+ company match)
+                        # Also ensure CBX entry has meaningful data (not mostly empty)
+                        cbx_company = cbx_row[CBX_COMPANY_EN] or cbx_row[CBX_COMPANY_FR] or ""
+                        cbx_has_meaningful_data = (
+                            cbx_company.strip() and len(cbx_company.strip()) > 2 and  # Company name exists and is not too short
+                            cbx_company.lower().strip() not in ('main department', 'ontario', 'montreal', 'ver', '')  # Filter out generic entries
+                        ) or (
+                            cbx_row[CBX_ADDRESS] or cbx_row[CBX_EMAIL] or cbx_row[CBX_FISTNAME]  # Has address or contact info
+                        )
+                        if ratio_company >= 70 and cbx_has_meaningful_data:
+                            analysis_string += f"{cbx_row[CBX_ID]}, {cbx_row[CBX_COMPANY_EN]}, {cbx_row[CBX_ADDRESS]}, {cbx_row[CBX_CITY]}, {cbx_row[CBX_STATE]}, {cbx_row[CBX_ZIP]}, {cbx_row[CBX_COUNTRY]}, {cbx_row[CBX_EMAIL]}, {cbx_row[CBX_FISTNAME]} {cbx_row[CBX_LASTNAME]} --> CR{ratio_company}, AR{ratio_address}, CM{contact_match}, HCC{hc_count}, M[{cbx_row[CBX_MODULES]}]\n"
+                    if ratio_company > best_name_score:
+                        best_name_score = ratio_company
+            
+            # Enhanced priority-based selection with business logic
+            selected_candidate = None
+            
+            if candidates:
+                # Only consider candidates that meet analysis threshold (company >= 70 and meaningful data)
+                eligible_candidates = [c for c in candidates if c['name_score'] >= 70]
+                
+                if eligible_candidates:
+                    # Priority 1: Perfect company name matches (>=95) - prioritize relationships first
+                    perfect_matches = [c for c in eligible_candidates if c['name_score'] >= 95]
+                    if perfect_matches:
+                        # FIXED: Prioritize hiring client relationships above all else, then verification and location
+                        # Sort by: hc_count (relationship depth), contact_match, zip_match, address_score, business_score
+                        perfect_matches = sorted(perfect_matches, key=lambda c: (
+                            c['hc_count'] > 0,            # Relationship exists (True > False)
+                            c['hc_count'],                # Relationship depth (more clients = stronger relationship)
+                            c['contact_match'],           # Contact verification 
+                            c['zip_match_strict'],        # Postal code accuracy
+                            c['address_score'],           # Address similarity
+                            c['business_score'],          # Business factors
+                            c['name_score']               # Name score
+                        ), reverse=True)
+                        selected_candidate = perfect_matches[0]
+                    else:
+                        # Priority 2: High company name matches (>=90) - prioritize relationships
+                        high_company_matches = [c for c in eligible_candidates if c['name_score'] >= 90]
+                        if high_company_matches:
+                            # FIXED: Prioritize relationships even for high matches
+                            high_company_matches = sorted(high_company_matches, key=lambda c: (
+                                c['hc_count'] > 0,        # Relationship exists
+                                c['hc_count'],            # Relationship depth
+                                c['contact_match'],       # Contact verification
+                                c['business_score'],      # Business factors
+                                c['name_score'],          # Company match quality
+                                c['address_score']        # Address match quality
+                            ), reverse=True)
+                            selected_candidate = high_company_matches[0]
+                        else:
+                            # Priority 3: Good matches (>=70) with postal code - business factors + location accuracy
+                            good_company_postal = [c for c in eligible_candidates if c['name_score'] >= 70 and hc_zip and c['zip'] == hc_zip]
+                            if good_company_postal:
+                                # Location + business factors for good matches
+                                good_company_postal = sorted(good_company_postal, key=lambda c: (c['business_score'], c['name_score'], c['address_score']), reverse=True)
+                                selected_candidate = good_company_postal[0]
+                            else:
+                                # Priority 4: Best overall combination - relationship-first approach
+                                # FIXED: Always prioritize relationship depth, then combined scoring
+                                for candidate in eligible_candidates:
+                                    # Enhanced scoring that heavily weighs relationships
+                                    relationship_bonus = candidate['hc_count'] * 20  # 20 points per hiring client relationship
+                                    candidate['combined_score'] = (
+                                        relationship_bonus +                    # Relationship depth (20 points per client)
+                                        candidate['name_score'] * 0.3 +        # Company match (30%)
+                                        candidate['business_score'] * 0.3 +     # Business factors (30%) 
+                                        candidate['address_score'] * 0.2        # Address match (20%)
+                                    )
+                                combo_candidates = sorted(eligible_candidates, key=lambda c: (
+                                    c['hc_count'] > 0,        # Relationship exists (boolean priority)
+                                    c['combined_score']       # Then combined score
+                                ), reverse=True)
+                                selected_candidate = combo_candidates[0]
+        
+        # Extract best match data (common for both forced and fuzzy matching)
+        if force_cbx_id:
+            # For forced matches, we already have best_match set above
+            best_ratio_company = 100  # Forced match = perfect score
+            best_ratio_address = 100  # Forced match = perfect score
+        elif selected_candidate:
             best_match = selected_candidate['cbx_row']
             best_ratio_company = selected_candidate['name_score']
             best_ratio_address = selected_candidate['address_score']
@@ -1116,19 +1209,21 @@ if __name__ == '__main__':
             best_ratio_company = 0
             best_ratio_address = 0
         
-        # Determine match quality
-        is_ambiguous = False
+        # Determine match quality (different logic for forced vs fuzzy matches)
         if best_match:
-            # Use the ratios from selected_candidate to maintain consistency 
-            # (best_ratio_company and best_ratio_address already set from selected_candidate)
-            contact_match = hc_row[HC_EMAIL] == best_match[CBX_EMAIL] and hc_row[HC_FIRSTNAME].lower() == best_match[CBX_FISTNAME].lower() and hc_row[HC_LASTNAME].lower() == best_match[CBX_LASTNAME].lower()
-            
-            # Determine if this is a good match, ambiguous, or should be onboarding
-            if best_ratio_company >= 70 and best_ratio_address < 70:  # Good company name but poor address
-                is_ambiguous = True
-            elif best_ratio_company < 50:  # Very poor company name match
-                # This should be treated as no match/onboarding
-                best_match = None
+            if force_cbx_id:
+                # For forced matches, is_ambiguous was already set during forced matching
+                contact_match = hc_row[HC_EMAIL] == best_match[CBX_EMAIL] and hc_row[HC_FIRSTNAME].lower() == best_match[CBX_FISTNAME].lower() and hc_row[HC_LASTNAME].lower() == best_match[CBX_LASTNAME].lower()
+            else:
+                # For fuzzy matches, use the existing logic
+                contact_match = hc_row[HC_EMAIL] == best_match[CBX_EMAIL] and hc_row[HC_FIRSTNAME].lower() == best_match[CBX_FISTNAME].lower() and hc_row[HC_LASTNAME].lower() == best_match[CBX_LASTNAME].lower()
+                
+                # Determine if this is a good match, ambiguous, or should be onboarding
+                if best_ratio_company >= 70 and best_ratio_address < 70:  # Good company name but poor address
+                    is_ambiguous = True
+                elif best_ratio_company < 50:  # Very poor company name match
+                    # This should be treated as no match/onboarding
+                    best_match = None
         
         # Build analysis string if we have a match
         if best_match:
@@ -1154,7 +1249,11 @@ if __name__ == '__main__':
         # Process the contractor based on match quality
         if best_match and not is_ambiguous:
                 # Good match - populate CBX columns and use action() for proper categorization
-                match_data = add_analysis_data(hc_row, best_match, analysis_string)
+                # Calculate contact match
+                contact_match = (hc_row[HC_EMAIL] == best_match[CBX_EMAIL] and 
+                               hc_row[HC_FIRSTNAME].lower() == best_match[CBX_FISTNAME].lower() and 
+                               hc_row[HC_LASTNAME].lower() == best_match[CBX_LASTNAME].lower())
+                match_data = add_analysis_data(hc_row, best_match, analysis_string, best_ratio_company, best_ratio_address, contact_match)
                 
                 # Calculate is_qualified and expiration_date for action
                 hiring_clients_list = best_match[CBX_HIRING_CLIENT_NAMES].split(args.list_separator) if best_match[CBX_HIRING_CLIENT_NAMES] else []
@@ -1232,7 +1331,11 @@ if __name__ == '__main__':
                     
         elif best_match and is_ambiguous:
                 # Ambiguous match - only populate CBX data if contractor has relationship with hiring client
-                match_data = add_analysis_data(hc_row, best_match, analysis_string)
+                # Calculate contact match
+                contact_match = (hc_row[HC_EMAIL] == best_match[CBX_EMAIL] and 
+                               hc_row[HC_FIRSTNAME].lower() == best_match[CBX_FISTNAME].lower() and 
+                               hc_row[HC_LASTNAME].lower() == best_match[CBX_LASTNAME].lower())
+                match_data = add_analysis_data(hc_row, best_match, analysis_string, best_ratio_company, best_ratio_address, contact_match)
                 
                 # Check if this contractor has relationship with the hiring client
                 has_relationship = match_data.get('is_in_relationship', False)
