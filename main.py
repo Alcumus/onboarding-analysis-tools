@@ -1,16 +1,6 @@
-def normalize_postal_code(code):
-    if not code:
-        return ''
-    import unicodedata
-    code = str(code).strip().upper()
-    code = unicodedata.normalize('NFKD', code)
-    code = ''.join([c for c in code if not unicodedata.combining(c)])
-    code = re.sub(r'[^A-Z0-9]', '', code)
-    return code
 import argparse
 import csv
 import re
-import unicodedata
 import openpyxl
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.utils import get_column_letter
@@ -40,132 +30,6 @@ HC_COMPANY, HC_FIRSTNAME, HC_LASTNAME, HC_EMAIL, HC_CONTACT_PHONE, HC_CONTACT_LA
     = range(HC_HEADER_LENGTH)
 
 SUPPORTED_CURRENCIES = ('CAD', 'USD')
-
-def normalize_address(address):
-    """Normalize address for exact matching comparison."""
-    if not address:
-        return ''
-    # Normalize unicode, remove extra spaces, standardize punctuation
-    normalized = unicodedata.normalize('NFKD', str(address).strip().lower())
-    normalized = ''.join([c for c in normalized if not unicodedata.combining(c)])
-    # Standardize common address abbreviations and punctuation
-    normalized = re.sub(r'\bboul\.?\b', 'boulevard', normalized)
-    normalized = re.sub(r'\brue\b', 'street', normalized) 
-    normalized = re.sub(r'\bste\.?\b', 'suite', normalized)
-    normalized = re.sub(r'\bbur\.?\b', 'bureau', normalized)
-    normalized = re.sub(r'[^\w\s]', ' ', normalized)  # Remove punctuation
-    normalized = re.sub(r'\s+', ' ', normalized).strip()  # Normalize spaces
-    return normalized
-
-def parse_address_components(address):
-    """Parse address into components for city/province extraction."""
-    if not address:
-        return {'address': '', 'city': '', 'province': ''}
-    
-    # Simple parsing - look for common patterns
-    # This is a basic implementation, could be enhanced with more sophisticated parsing
-    parts = str(address).split(',')
-    if len(parts) >= 2:
-        return {
-            'address': parts[0].strip(),
-            'city': parts[-2].strip() if len(parts) > 2 else '',
-            'province': parts[-1].strip().split()[0] if parts[-1].strip() else ''
-        }
-    return {'address': address.strip(), 'city': '', 'province': ''}
-
-def calculate_location_bonus(input_address, input_city, input_province, candidate_address, candidate_city, candidate_province, input_country=None, candidate_country=None):
-    """Calculate location proximity bonus for business scoring."""
-    if not input_address or not candidate_address:
-        return 0
-        
-    # Exact address match (same building/suite)
-    if normalize_address(input_address) == normalize_address(candidate_address):
-        return 25  # Increased from 20
-    
-    # Same city match
-    if (input_city and candidate_city and 
-        input_city.lower().strip() == candidate_city.lower().strip()):
-        return 15  # Increased from 10
-        
-    # Same province/state match
-    if (input_province and candidate_province and 
-        input_province.lower().strip() == candidate_province.lower().strip()):
-        return 10  # Increased from 5
-        
-    # Same country match (important for international vs domestic)
-    if (input_country and candidate_country and 
-        input_country.lower().strip() == candidate_country.lower().strip()):
-        return 8   # Country match bonus
-        
-    # PENALTY: International mismatch (domestic contractor vs international candidate)
-    # This helps prevent Canadian contractors from being matched to Swiss/other international companies
-    if (input_country and candidate_country and 
-        input_country.lower().strip() != candidate_country.lower().strip()):
-        return -15  # Heavy penalty for country mismatch
-        
-    return 0
-
-def fuzzy_match_hiring_client(input_client, candidate_clients_list):
-    """
-    Fuzzy match hiring client names to handle variations like:
-    'Aéroports de Montréal' vs 'ADM' or 'Inc.' vs 'Inc' differences
-    """
-    if not input_client or not candidate_clients_list:
-        return False, None
-        
-    input_client = str(input_client).strip()
-    if not input_client:
-        return False, None
-    
-    # First try exact match
-    for client in candidate_clients_list:
-        if input_client == client:
-            return True, client
-    
-    # Try case-insensitive exact match
-    input_lower = input_client.lower()
-    for client in candidate_clients_list:
-        if input_lower == str(client).lower():
-            return True, client
-    
-    # Try contains match (input contained in candidate or vice versa)
-    for client in candidate_clients_list:
-        client_str = str(client)
-        if input_client in client_str or client_str in input_client:
-            return True, client
-    
-    # Try fuzzy matching with normalized names
-    input_normalized = clean_company_name(input_client)
-    for client in candidate_clients_list:
-        client_normalized = clean_company_name(str(client))
-        
-        # High threshold fuzzy match
-        if fuzz.ratio(input_normalized, client_normalized) >= 85:
-            return True, client
-            
-        # Check for common abbreviations
-        if is_likely_abbreviation_match(input_normalized, client_normalized):
-            return True, client
-    
-    return False, None
-
-def is_likely_abbreviation_match(name1, name2):
-    """Check if one name is likely an abbreviation of another."""
-    # Extract first letters of words for abbreviation matching
-    def get_abbreviation(name):
-        words = re.findall(r'\b\w+', name.upper())
-        return ''.join(word[0] for word in words if len(word) > 2)  # Skip short words
-    
-    abbrev1 = get_abbreviation(name1)
-    abbrev2 = get_abbreviation(name2)
-    
-    # Check if one is abbreviation of the other
-    if len(abbrev1) >= 2 and len(abbrev2) >= 2:
-        return (abbrev1 in name2.upper().replace(' ', '') or 
-                abbrev2 in name1.upper().replace(' ', '') or
-                abbrev1 == abbrev2)
-    
-    return False
 
 assessment_levels = {
     "gold": 2,
@@ -296,8 +160,8 @@ parser.add_argument('--hc_list_offset', dest='hc_list_offset', action='store',
                          'This includes the headers')
 
 parser.add_argument('--min_company_match_ratio', dest='ratio_company', action='store',
-                    default=70,
-                    help='Minimum match ratio for contractors, between 0 and 100 (default 70)')
+                    default=80,
+                    help='Minimum match ratio for contractors, between 0 and 100 (default 80)')
 
 parser.add_argument('--min_address_match_ratio', dest='ratio_address', action='store',
                     default=80,
@@ -341,24 +205,14 @@ def smart_boolean(bool_data):
 
 
 # noinspection PyShadowingNames
-def add_analysis_data(hc_row, cbx_row, analysis_string=''):
+def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, contact_match=None):
     cbx_company = cbx_row[CBX_COMPANY_FR] if cbx_row[CBX_COMPANY_FR] else cbx_row[CBX_COMPANY_EN]
-    # print debug removed, hc_email not defined here
-    # Parse hiring client data with improved fuzzy matching and data quality fixes
-    hiring_clients_list = cbx_row[CBX_HIRING_CLIENT_NAMES].split(args.list_separator) if cbx_row[CBX_HIRING_CLIENT_NAMES] else []
-    hiring_clients_qstatus = cbx_row[CBX_HIRING_CLIENT_QSTATUS].split(args.list_separator) if cbx_row[CBX_HIRING_CLIENT_QSTATUS] else []
-    
-    # Validate array lengths and log mismatches
-    hc_count = len(hiring_clients_list)
-    if len(hiring_clients_list) != len(hiring_clients_qstatus) and hiring_clients_qstatus:
-        print(f'WARNING: Array length mismatch for CBX ID {cbx_row[CBX_ID]}: {len(hiring_clients_list)} clients vs {len(hiring_clients_qstatus)} statuses')
-        # Pad shorter array with empty values
-        max_len = max(len(hiring_clients_list), len(hiring_clients_qstatus))
-        hiring_clients_list.extend([''] * (max_len - len(hiring_clients_list)))
-        hiring_clients_qstatus.extend([''] * (max_len - len(hiring_clients_qstatus)))
-    
-    # Use fuzzy matching for hiring client relationship detection
-    is_in_relationship, matched_client = fuzzy_match_hiring_client(hc_row[HC_HIRING_CLIENT_NAME], hiring_clients_list)
+    print('   --> ', cbx_company, hc_email, cbx_row[CBX_ID], ratio_company, ratio_address, contact_match)
+    hiring_clients_list = cbx_row[CBX_HIRING_CLIENT_NAMES].split(args.list_separator)
+    hiring_clients_qstatus = cbx_row[CBX_HIRING_CLIENT_QSTATUS].split(args.list_separator)
+    hc_count = len(hiring_clients_list) if cbx_row[CBX_HIRING_CLIENT_NAMES] else 0
+    is_in_relationship = True if (
+            hc_row[HC_HIRING_CLIENT_NAME] in hiring_clients_list and hc_row[HC_HIRING_CLIENT_NAME]) else False
     is_qualified = False
     sub_price_usd = float(cbx_row[CBX_SUB_PRICE_USD]) if cbx_row[CBX_SUB_PRICE_USD] else 0.0
     employee_price_usd = float(cbx_row[CBX_EMPL_PRICE_USD]) if cbx_row[CBX_EMPL_PRICE_USD] else 0.0
@@ -368,23 +222,10 @@ def add_analysis_data(hc_row, cbx_row, analysis_string=''):
 
     if hc_row[HC_CONTACT_CURRENCY] != '' and hc_row[HC_CONTACT_CURRENCY] not in SUPPORTED_CURRENCIES:
         raise AssertionError(f'Invalid currency: {hc_row[HC_CONTACT_CURRENCY]}, must be in {SUPPORTED_CURRENCIES}')
-    # Check qualification status with improved matching and data quality fixes
-    if is_in_relationship and matched_client:
-        for idx, client in enumerate(hiring_clients_list):
-            if (client == matched_client and idx < len(hiring_clients_qstatus)):
-                status = hiring_clients_qstatus[idx].lower().strip()
-                # Fix common typos and variations for APPROVED/QUALIFIED statuses
-                if status in ('validated', 'validate', 'valid', 'approved', 'approve', 'qualified', 'active'):
-                    is_qualified = True
-                    break
-                # Handle EXPIRED statuses
-                elif status in ('exprired', 'expired', 'expire'):
-                    is_qualified = False  # Expired means not currently qualified
-                    break
-                # Handle NOT APPROVED/PENDING statuses
-                elif status in ('not approved', 'not_approved', 'pending', 'pending approval', 'under review', 'in progress'):
-                    is_qualified = False  # Needs follow-up qualification
-                    break
+    for idx, val in enumerate(hiring_clients_list):
+        if val == hc_row[HC_HIRING_CLIENT_NAME] and hiring_clients_qstatus[idx] == 'validated':
+            is_qualified = True
+            break
     try:
         expiration_date = datetime.strptime(cbx_row[CBX_EXPIRATION_DATE],
                                         "%d/%m/%y") if cbx_row[CBX_EXPIRATION_DATE] else None
@@ -392,9 +233,9 @@ def add_analysis_data(hc_row, cbx_row, analysis_string=''):
         expiration_date = datetime.strptime(cbx_row[CBX_EXPIRATION_DATE],
                                         "%d/%m/%Y") if cbx_row[CBX_EXPIRATION_DATE] else None
 
-    return {'cbx_id': int(cbx_row[CBX_ID]), 'hc_contractor_summary': hiring_client_contractor_summary, 'analysis': analysis_string, 'company': cbx_company, 'address': cbx_row[CBX_ADDRESS],
+    return {'cbx_id': int(cbx_row[CBX_ID]), 'hc_contractor_summary': hiring_client_contractor_summary, 'analysis':'', 'company': cbx_company, 'address': cbx_row[CBX_ADDRESS],
             'city': cbx_row[CBX_CITY], 'state': cbx_row[CBX_STATE], 'zip': cbx_row[CBX_ZIP],
-            'country': cbx_row[CBX_COUNTRY], 'expiration_date': expiration_date.strftime('%Y-%m-%d %H:%M:%S') if expiration_date else '',
+            'country': cbx_row[CBX_COUNTRY], 'expiration_date': expiration_date,
             'registration_status': cbx_row[CBX_REGISTRATION_STATUS],
             'suspended': cbx_row[CBX_SUSPENDED], 'email': cbx_row[CBX_EMAIL], 'first_name': cbx_row[CBX_FISTNAME],
             'last_name': cbx_row[CBX_LASTNAME], 'modules': cbx_row[CBX_MODULES],
@@ -426,36 +267,11 @@ def core_mandatory_provided(hcd):
 
 # noinspection PyShadowingNames
 def action(hc_data, cbx_data, create, subscription_update, expiration_date, is_qualified, ignore):
-    # Check for association fee first, regardless of create status
-    if hc_data[HC_IS_ASSOCIATION_FEE] and cbx_data:
-        reg_status = cbx_data.get('registration_status')
-        if reg_status in ('Active', 'Non Member') and not cbx_data.get('is_in_relationship', False):
-            if expiration_date:
-                in_60_days = datetime.now() + timedelta(days=60)
-                if expiration_date > in_60_days:
-                    return 'association_fee'
-                else:
-                    return 'add_questionnaire'
-            else:
-                return 'association_fee'
-
     if create:
         if smart_boolean(hc_data[HC_IS_TAKE_OVER]):
             return 'activation_link'
         else:
-            # PRIORITY FIX: If contractor has existing relationship, use relationship-based actions
-            # even if marked as ambiguous (this fixes the QSL International contractor issue)
-            if cbx_data and cbx_data.get('is_in_relationship', False):
-                if cbx_data.get('registration_status') == 'Active':
-                    if is_qualified:
-                        return 'already_qualified'
-                    else:
-                        return 'follow_up_qualification'
-                elif cbx_data.get('registration_status') == 'Suspended':
-                    return 'restore_suspended'
-                else:
-                    return 'add_questionnaire'
-            elif hc_data[HC_AMBIGUOUS]:
+            if hc_data[HC_AMBIGUOUS]:
                 return 'ambiguous_onboarding'
             elif core_mandatory_provided(hc_data):
                 return 'onboarding'
@@ -520,132 +336,20 @@ def check_headers(headers, standards, ignore):
 
 
 def clean_company_name(name):
-    import unicodedata
-    name = name.lower()
-    # Add Unicode normalization and accent removal (consistent with address normalization)
-    name = unicodedata.normalize('NFKD', name)
-    name = ''.join([c for c in name if not unicodedata.combining(c)])  # Remove accents
+    name = name.lower().replace('.', '').replace(',', '').strip()
     name = re.sub(r"\([^()]*\)", "", name)
-    name = re.sub(r'[.,;:/\\]', ' ', name)
-    name = re.sub(r'[-_]', ' ', name)
     name = remove_generics(name)
-    name = re.sub(r'\s+', ' ', name)
-    # Remove generic legal suffixes AND common filler words that don't help matching
-    words = [w for w in name.split() if w not in ('inc', 'ltd', 'ltée', 'ltee', 'co', 'corp', 'corporation', 'company', 'llc', 'sarl', 'sa', 'plc', 'enr', 'industriel', 'industriels', 'services', 'service', 'solutions', 'systems', 'technologies', 'installations')]
-    words = sorted(set(words))
+    # Remove extra spaces and hyphens, and sort words for order-insensitive comparison
+    name = re.sub(r'[-]', ' ', name)
+    words = sorted(set(name.split()))
     return ' '.join(words)
-    if not clean_name:
-        return cbx_data
-    
-    # Extract first few characters for quick filtering
-    name_start = clean_name[:3] if len(clean_name) >= 3 else clean_name
-    name_length = len(clean_name)
-    
-    # Common French/English company prefixes that should be ignored for first-char matching
-    common_prefixes = ['les ', 'le ', 'la ', 'l ', 'entreprises ', 'entreprise ', 'ets ', 'portes ', 'service ', 'services ', 'groupe ']
-    
-    # Extract meaningful words (for acronym/word matching)
-    hc_words = set(clean_name.split())
-    
-    # Check if HC name might be an acronym (short, all caps-like, no common words)
-    is_likely_acronym = name_length <= 6 and len(hc_words) == 1
-    
-    # Fast pre-filtering criteria
-    filtered = []
-    for cbx_row in cbx_data:
-        cbx_en = clean_company_name(cbx_row[CBX_COMPANY_EN])
-        cbx_fr = clean_company_name(cbx_row[CBX_COMPANY_FR])
-        cbx_old = clean_company_name(cbx_row[CBX_COMPANY_OLD]) if cbx_row[CBX_COMPANY_OLD] else ''
-        
-        # Quick rejection filters (very fast string operations)
-        # Filter 1: Smart first character match
-        # - For normal names: check first character, but also check after removing common prefixes
-        # - For acronyms: check if HC acronym appears anywhere in CBX name
-        
-        passes_first_char = False
-        
-        # Helper function to remove prefixes
-        def remove_prefixes(name):
-            for prefix in common_prefixes:
-                if name.startswith(prefix):
-                    return name[len(prefix):].strip()
-            return name
-        
-        # Get all name variants (original and without prefixes)
-        cbx_en_variants = [cbx_en, remove_prefixes(cbx_en)]
-        cbx_fr_variants = [cbx_fr, remove_prefixes(cbx_fr)]
-        cbx_old_variants = [cbx_old, remove_prefixes(cbx_old)] if cbx_old else []
-        
-        # Check direct first character match against all variants
-        for variant in cbx_en_variants + cbx_fr_variants + cbx_old_variants:
-            if variant and len(variant) > 0 and name_start[0] == variant[0]:
-                passes_first_char = True
-                break
-        
-        # For potential acronyms: check if acronym letters appear in order
-        if not passes_first_char and is_likely_acronym:
-            acronym = clean_name.replace(' ', '').lower()
-            # Check if each letter of acronym appears in order in CBX name
-            for cbx_name in [cbx_en, cbx_fr, cbx_old]:
-                if not cbx_name:
-                    continue
-                # Try exact acronym match first
-                if acronym in cbx_name.replace(' ', ''):
-                    passes_first_char = True
-                    break
-                # Try fuzzy acronym: check if letters appear in sequence
-                words = cbx_name.split()
-                if len(words) >= len(acronym):
-                    # Check if first letters of words form the acronym
-                    first_letters = ''.join([w[0] for w in words if w])
-                    if acronym in first_letters or first_letters.startswith(acronym):
-                        passes_first_char = True
-                        break
-        
-        if not passes_first_char:
-            continue
-        
-        # Filter 2: Length similarity (companies with very different name lengths rarely match)
-        # Allow +/- 20 characters difference (increased from 15 to handle more prefix variations)
-        lengths = [len(cbx_en), len(cbx_fr)]
-        if cbx_old:
-            lengths.append(len(cbx_old))
-        
-        min_len = min(lengths)
-        max_len = max(lengths)
-        
-        # Be more lenient for short names (they often have longer variations)
-        tolerance = 30 if name_length <= 10 else 20
-        
-        if (name_length < min_len - tolerance or name_length > max_len + tolerance):
-            continue
-        
-        # Filter 3: At least one common word (very discriminative)
-        en_words = set(cbx_en.split())
-        fr_words = set(cbx_fr.split())
-        old_words = set(cbx_old.split()) if cbx_old else set()
-        
-        has_common_word = bool(hc_words & en_words or hc_words & fr_words or hc_words & old_words)
-        
-        # Must have at least one word in common with any CBX name variant
-        if not has_common_word:
-            # Exception 1: if names are very short (< 8 chars), be more lenient
-            # Exception 2: if this might be an acronym match
-            if name_length >= 8 and not is_likely_acronym:
-                continue
-        
-        # Passed all filters - keep this candidate
-        filtered.append(cbx_row)
-    
-    return filtered
 
 def normalize_address(addr):
     import unicodedata
     addr = addr.lower()
     addr = unicodedata.normalize('NFKD', addr)
     addr = ''.join([c for c in addr if not unicodedata.combining(c)])  # Remove accents
-    addr = re.sub(r'[.,;:/\\]', ' ', addr)
-    addr = re.sub(r'[-_]', ' ', addr)
+    addr = re.sub(r'[.,\-]', ' ', addr)  # Remove punctuation and hyphens
     # Convert French street types/directions to English and handle abbreviations
     translations = {
         'chemin': 'road',
@@ -678,15 +382,9 @@ def normalize_address(addr):
         addr = re.sub(rf'\b{fr}\b', en, addr)
     addr = re.sub(r'\s+', ' ', addr)
     addr = addr.strip()
-    # Keep suite/bureau info for strict matching
-    suite_keywords = ['app', 'appt', 'apartment', 'suite', 'ste', 'bureau', 'bur', 'office', 'ofc', 'room', 'rm', 'unit', 'lot', 'porte', 'door', 'etage', 'floor', 'niveau', 'level']
-    suite_info = [w for w in addr.split() if w in suite_keywords]
-    suite_mapping = {'bur': 'bureau', 'ste': 'suite', 'appt': 'suite', 'app': 'suite', 'etage': 'floor', 'niveau': 'floor', 'porte': 'door'}
-    suite_info = [suite_mapping.get(w, w) for w in suite_info]
-    words = [w for w in addr.split() if w not in ('appartement', 'apartment', 'building', 'immeuble', 'floor', 'etage', 'étage')]
-    words = sorted(set(words))
-    # Add suite/bureau info at the end for matching
-    return ' '.join(words + suite_info)
+    # Remove duplicate words and sort for order-insensitive comparison
+    words = sorted(set(addr.split()))
+    return ' '.join(words)
 
 
 def parse_assessment_level(level):
@@ -738,7 +436,7 @@ if __name__ == '__main__':
     print(f'Completed reading {len(cbx_data)} contractors.')
 
     print('Reading hiring client data file...')
-    hc_wb = openpyxl.load_workbook(hc_file, read_only=True, data_only=False)
+    hc_wb = openpyxl.load_workbook(hc_file, read_only=True, data_only=True)
     if args.hc_list_sheet_name:
         hc_sheet = hc_wb.get_sheet_by_name(args.hc_list_sheet_name)
     else:
@@ -761,7 +459,7 @@ if __name__ == '__main__':
         # retrieve
         if not row[0].value:
             continue
-        hc_data.append([str(cell.value) if cell.value is not None else '' for cell in row])
+        hc_data.append([cell.value if cell.value is not None else '' for cell in row])
     total = len(hc_data) - 1
     metadata_indexes = []
     headers = []
@@ -787,11 +485,11 @@ if __name__ == '__main__':
             # Ignore extra columns: only process expected columns, leave extras untouched
             # Trim whitespace from all fields
             row = [str(cell).strip() if cell is not None else '' for cell in row]
-            # Ensure company name and address are properly Unicode normalized
+            # Ensure company name and address are UTF-8 encoded and normalized
             if row[HC_COMPANY]:
-                row[HC_COMPANY] = unicodedata.normalize('NFC', row[HC_COMPANY])
+                row[HC_COMPANY] = row[HC_COMPANY].encode('utf-8', errors='ignore').decode('utf-8')
             if row[HC_STREET]:
-                row[HC_STREET] = unicodedata.normalize('NFC', row[HC_STREET])
+                row[HC_STREET] = row[HC_STREET].encode('utf-8', errors='ignore').decode('utf-8')
             # Existing normalization logic
             if row[HC_COUNTRY].lower().strip() == 'ca':
                 if row[HC_CONTACT_CURRENCY].lower().strip() not in ('cad', ''):
@@ -918,414 +616,154 @@ if __name__ == '__main__':
         out_wb.save(filename=output_file)
     # match
     for index, hc_row in enumerate(hc_data):
-        print(f"Processing {index+1}/{len(hc_data)}: {hc_row[HC_COMPANY]}")
-        
+        matches = []
         hc_company = hc_row[HC_COMPANY]
+
         clean_hc_company = clean_company_name(hc_company)
-        hc_zip = normalize_postal_code(hc_row[HC_ZIP])
-        
-        hc_address = str(hc_row[HC_STREET]).lower().replace('.', '').replace(',', '').replace('north', 'n').replace('south', 's').replace('east', 'e').replace('west', 'w').replace('  ', ' ').strip()
-        hc_address_norm = normalize_address(hc_address)
-        suite_keywords = ['suite', 'bureau', 'office']
-        hc_suite = [w for w in hc_address_norm.split() if w in suite_keywords]
-        candidates = []
-        analysis_string = ''
-        best_name_score = -1
-        for cbx_row in cbx_data:
-            cbx_company_en = clean_company_name(cbx_row[CBX_COMPANY_EN])
-            cbx_company_fr = clean_company_name(cbx_row[CBX_COMPANY_FR])
-            ratio_company_fr = max(
-                fuzz.token_sort_ratio(cbx_company_fr, clean_hc_company),
-                fuzz.partial_ratio(cbx_company_fr, clean_hc_company),
-                fuzz.token_set_ratio(cbx_company_fr, clean_hc_company)
-            )
-            ratio_company_en = max(
-                fuzz.token_sort_ratio(cbx_company_en, clean_hc_company),
-                fuzz.partial_ratio(cbx_company_en, clean_hc_company),
-                fuzz.token_set_ratio(cbx_company_en, clean_hc_company)
-            )
-            ratio_company = max(ratio_company_fr, ratio_company_en)
-            cbx_zip = normalize_postal_code(cbx_row[CBX_ZIP])
-            cbx_address = normalize_address(cbx_row[CBX_ADDRESS])
-            cbx_suite = [w for w in cbx_address.split() if w in suite_keywords]
-            ratio_address = max(
-                fuzz.token_sort_ratio(cbx_address, hc_address_norm),
-                fuzz.partial_ratio(cbx_address, hc_address_norm),
-                fuzz.token_set_ratio(cbx_address, hc_address_norm)
-            )
-            zip_match_strict = hc_zip and cbx_zip and hc_zip == cbx_zip
-            suite_match_strict = hc_suite and cbx_suite and bool(set(hc_suite) & set(cbx_suite))
-            address_threshold = min(float(args.ratio_address), 80)
-            address_match = ratio_address >= address_threshold
-            name_substring = clean_hc_company.lower() in cbx_company_en.lower() or clean_hc_company.lower() in cbx_company_fr.lower() or cbx_company_en.lower() in clean_hc_company.lower() or cbx_company_fr.lower() in clean_hc_company.lower()
-            # Also check old names
-            cbx_old_names = clean_company_name(cbx_row[CBX_COMPANY_OLD]) if cbx_row[CBX_COMPANY_OLD] else ''
-            if cbx_old_names:
-                ratio_company_old = max(
-                    fuzz.token_sort_ratio(cbx_old_names, clean_hc_company),
-                    fuzz.partial_ratio(cbx_old_names, clean_hc_company),
-                    fuzz.token_set_ratio(cbx_old_names, clean_hc_company)
-                )
-                ratio_company = max(ratio_company, ratio_company_old)
-                name_substring = name_substring or clean_hc_company.lower() in cbx_old_names.lower() or cbx_old_names.lower() in clean_hc_company.lower()
-            if (ratio_company >= float(args.ratio_company) or name_substring):
-                hiring_clients_list = cbx_row[CBX_HIRING_CLIENT_NAMES].split(args.list_separator) if cbx_row[CBX_HIRING_CLIENT_NAMES] else []
-                hc_count = len(hiring_clients_list)
-                contact_match = hc_row[HC_EMAIL] == cbx_row[CBX_EMAIL] and hc_row[HC_FIRSTNAME].lower() == cbx_row[CBX_FISTNAME].lower() and hc_row[HC_LASTNAME].lower() == cbx_row[CBX_LASTNAME].lower()
-                
-                # Calculate business value factors
-                module_count = len(cbx_row[CBX_MODULES].split(';')) if cbx_row[CBX_MODULES] and cbx_row[CBX_MODULES].strip() else 0
-                
-                # Calculate location proximity bonus (including country matching/penalties)
-                location_bonus = calculate_location_bonus(
-                    hc_row[HC_STREET], hc_row[HC_CITY], hc_row[HC_STATE],
-                    cbx_row[CBX_ADDRESS], cbx_row[CBX_CITY], cbx_row[CBX_STATE],
-                    hc_row[HC_COUNTRY], cbx_row[CBX_COUNTRY]
-                )
-                
-                # Calculate business quality score (higher is better)
-                # FIXED: Reduced HC count weight from 2 to 0.5 to prevent high-volume contractors from dominating selection
-                # Prioritize verification and location accuracy over business volume
-                business_score = (
-                    module_count * 3 +                      # Modules: 3 points each (reduced from 5, qualification breadth)
-                    min(hc_count * 0.5, 5) +               # Hiring clients: 0.5 points each, capped at 5 total (reduced dominance)
-                    (30 if contact_match else 0) +         # Contact match: 30 point bonus (increased from 20, verification priority)
-                    (25 if zip_match_strict else 0) +      # Postal code match: 25 point bonus (increased from 10, location accuracy)
-                    (15 if suite_match_strict else 0) +    # Suite match: 15 point bonus (increased from 5, address precision)
-                    location_bonus * 2                     # Location proximity: doubled weight for geographical relevance
-                )
-                
-                candidates.append({
-                    'cbx_row': cbx_row,
-                    'name_score': ratio_company,
-                    'address_score': ratio_address,
-                    'business_score': business_score,
-                    'module_count': module_count,
-                    'hc_count': hc_count,
-                    'contact_match': contact_match,
-                    'location_bonus': location_bonus,
-                    'zip': cbx_zip,
-                    'suite': cbx_suite,
-                    'zip_match_strict': zip_match_strict,
-                    'suite_match_strict': suite_match_strict
-                })
-                if ratio_company >= 50 or ratio_address >= 50 or name_substring:
-                    # Only include very close matches in analysis (90%+ company match)
-                    # Also ensure CBX entry has meaningful data (not mostly empty)
-                    cbx_company = cbx_row[CBX_COMPANY_EN] or cbx_row[CBX_COMPANY_FR] or ""
-                    cbx_has_meaningful_data = (
-                        cbx_company.strip() and len(cbx_company.strip()) > 2 and  # Company name exists and is not too short
-                        cbx_company.lower().strip() not in ('main department', 'ontario', 'montreal', 'ver', '')  # Filter out generic entries
-                    ) or (
-                        cbx_row[CBX_ADDRESS] or cbx_row[CBX_EMAIL] or cbx_row[CBX_FISTNAME]  # Has address or contact info
-                    )
-                    if ratio_company >= 70 and cbx_has_meaningful_data:
-                        analysis_string += f"{cbx_row[CBX_ID]}, {cbx_row[CBX_COMPANY_EN]}, {cbx_row[CBX_ADDRESS]}, {cbx_row[CBX_CITY]}, {cbx_row[CBX_STATE]}, {cbx_row[CBX_ZIP]}, {cbx_row[CBX_COUNTRY]}, {cbx_row[CBX_EMAIL]}, {cbx_row[CBX_FISTNAME]} {cbx_row[CBX_LASTNAME]} --> CR{ratio_company}, AR{ratio_address}, CM{contact_match}, HCC{hc_count}, M[{cbx_row[CBX_MODULES]}]\n"
-                if ratio_company > best_name_score:
-                    best_name_score = ratio_company
-        # Enhanced priority-based selection with business logic
-        selected_candidate = None
-        
-        if candidates:
-            # Only consider candidates that meet analysis threshold (company >= 70 and meaningful data)
-            eligible_candidates = [c for c in candidates if c['name_score'] >= 70]
-            
-            if eligible_candidates:
-                # Priority 1: Perfect company name matches (>=95) - prioritize relationships first
-                perfect_matches = [c for c in eligible_candidates if c['name_score'] >= 95]
-                if perfect_matches:
-                    # FIXED: Prioritize hiring client relationships above all else, then verification and location
-                    # Sort by: hc_count (relationship depth), contact_match, zip_match, address_score, business_score
-                    perfect_matches = sorted(perfect_matches, key=lambda c: (
-                        c['hc_count'] > 0,            # Relationship exists (True > False)
-                        c['hc_count'],                # Relationship depth (more clients = stronger relationship)
-                        c['contact_match'],           # Contact verification 
-                        c['zip_match_strict'],        # Postal code accuracy
-                        c['address_score'],           # Address similarity
-                        c['business_score'],          # Business factors
-                        c['name_score']               # Name score
-                    ), reverse=True)
-                    selected_candidate = perfect_matches[0]
-                else:
-                    # Priority 2: High company name matches (>=90) - prioritize relationships
-                    high_company_matches = [c for c in eligible_candidates if c['name_score'] >= 90]
-                    if high_company_matches:
-                        # FIXED: Prioritize relationships even for high matches
-                        high_company_matches = sorted(high_company_matches, key=lambda c: (
-                            c['hc_count'] > 0,        # Relationship exists
-                            c['hc_count'],            # Relationship depth
-                            c['contact_match'],       # Contact verification
-                            c['business_score'],      # Business factors
-                            c['name_score'],          # Company match quality
-                            c['address_score']        # Address match quality
-                        ), reverse=True)
-                        selected_candidate = high_company_matches[0]
+        hc_email = str(hc_row[HC_EMAIL]).lower()
+        # if multiple values use the first one...
+        hc_email = hc_email.split(';')[0]
+        hc_email = hc_email.split('\n')[0]
+        hc_email = hc_email.split(',')[0]
+        hc_email = hc_email.strip()
+        hc_domain = hc_email[hc_email.find('@') + 1:]
+        hc_zip = str(hc_row[HC_ZIP]).replace(' ', '').upper()
+        hc_address = str(hc_row[HC_STREET]).lower().replace('.', '').strip()
+        hc_force_cbx = str(hc_row[HC_FORCE_CBX_ID])
+        if not smart_boolean(hc_row[HC_DO_NOT_MATCH]):
+            if hc_force_cbx:
+                cbx_row = next(filter(lambda x: x[CBX_ID].strip() == hc_force_cbx, cbx_data), None)
+                if cbx_row:
+                    matches.append(add_analysis_data(hc_row, cbx_row))
+            else:
+                for cbx_row in cbx_data:
+                    cbx_email = cbx_row[CBX_EMAIL].lower()
+                    cbx_domain = cbx_email[cbx_email.find('@') + 1:]
+                    contact_match = False
+                    if hc_email:
+                        if hc_domain in GENERIC_DOMAIN:
+                            contact_match = True if cbx_email == hc_email else False
+                        else:
+                            contact_match = True if cbx_domain == hc_domain else False
                     else:
-                        # Priority 3: Good matches (>=70) with postal code - business factors + location accuracy
-                        good_company_postal = [c for c in eligible_candidates if c['name_score'] >= 70 and hc_zip and c['zip'] == hc_zip]
-                        if good_company_postal:
-                            # Location + business factors for good matches
-                            good_company_postal = sorted(good_company_postal, key=lambda c: (c['business_score'], c['name_score'], c['address_score']), reverse=True)
-                            selected_candidate = good_company_postal[0]
-                        else:
-                            # Priority 4: Best overall combination - relationship-first approach
-                            # FIXED: Always prioritize relationship depth, then combined scoring
-                            for candidate in eligible_candidates:
-                                # Enhanced scoring that heavily weighs relationships
-                                relationship_bonus = candidate['hc_count'] * 20  # 20 points per hiring client relationship
-                                candidate['combined_score'] = (
-                                    relationship_bonus +                    # Relationship depth (20 points per client)
-                                    candidate['name_score'] * 0.3 +        # Company match (30%)
-                                    candidate['business_score'] * 0.3 +     # Business factors (30%) 
-                                    candidate['address_score'] * 0.2        # Address match (20%)
-                                )
-                            combo_candidates = sorted(eligible_candidates, key=lambda c: (
-                                c['hc_count'] > 0,        # Relationship exists (boolean priority)
-                                c['combined_score']       # Then combined score
-                            ), reverse=True)
-                            selected_candidate = combo_candidates[0]
-        
-        # Extract best match data
-        if selected_candidate:
-            best_match = selected_candidate['cbx_row']
-            best_ratio_company = selected_candidate['name_score']
-            best_ratio_address = selected_candidate['address_score']
-        else:
-            best_match = None
-            best_ratio_company = 0
-            best_ratio_address = 0
-        
-        # Determine match quality
-        is_ambiguous = False
-        if best_match:
-            # Use the ratios from selected_candidate to maintain consistency 
-            # (best_ratio_company and best_ratio_address already set from selected_candidate)
-            contact_match = hc_row[HC_EMAIL] == best_match[CBX_EMAIL] and hc_row[HC_FIRSTNAME].lower() == best_match[CBX_FISTNAME].lower() and hc_row[HC_LASTNAME].lower() == best_match[CBX_LASTNAME].lower()
-            
-            # Determine if this is a good match, ambiguous, or should be onboarding
-            if best_ratio_company >= 70 and best_ratio_address < 70:  # Good company name but poor address
-                is_ambiguous = True
-            elif best_ratio_company < 50:  # Very poor company name match
-                # This should be treated as no match/onboarding
-                best_match = None
-        
-        # Build analysis string if we have a match
-        if best_match:
-            # Only create single-entry analysis if no multi-entry analysis was built at all
-            if not analysis_string.strip():
-                hiring_clients_list = best_match[CBX_HIRING_CLIENT_NAMES].split(args.list_separator) if best_match[CBX_HIRING_CLIENT_NAMES] else []
-                hc_count = len(hiring_clients_list)
-                contact_match = hc_row[HC_EMAIL] == best_match[CBX_EMAIL] and hc_row[HC_FIRSTNAME].lower() == best_match[CBX_FISTNAME].lower() and hc_row[HC_LASTNAME].lower() == best_match[CBX_LASTNAME].lower()
-                analysis_string = f"{best_match[CBX_ID]}, {best_match[CBX_COMPANY_EN]}, {best_match[CBX_ADDRESS]}, {best_match[CBX_CITY]}, {best_match[CBX_STATE]}, {best_match[CBX_ZIP]}, {best_match[CBX_COUNTRY]}, {best_match[CBX_EMAIL]}, {best_match[CBX_FISTNAME]} {best_match[CBX_LASTNAME]} --> CR{best_ratio_company}, AR{best_ratio_address}, CM{contact_match}, HCC{hc_count}, M[{best_match[CBX_MODULES]}]\n"
-            
-            # For good matches, add a header to show which entry was selected as the best match
-            if not is_ambiguous and analysis_string.strip():
-                # Prepend the selected match info to the analysis for clarity
-                hiring_clients_list = best_match[CBX_HIRING_CLIENT_NAMES].split(args.list_separator) if best_match[CBX_HIRING_CLIENT_NAMES] else []
-                hc_count = len(hiring_clients_list)
-                # Calculate contact match for the selected candidate
-                selected_contact_match = (hc_row[HC_EMAIL] == best_match[CBX_EMAIL] and 
-                                        hc_row[HC_FIRSTNAME].lower() == best_match[CBX_FISTNAME].lower() and 
-                                        hc_row[HC_LASTNAME].lower() == best_match[CBX_LASTNAME].lower()) if selected_candidate else False
-                selected_match_info = f">>> SELECTED BEST MATCH: {best_match[CBX_ID]}, {best_match[CBX_COMPANY_EN]}, {best_match[CBX_ADDRESS]}, {best_match[CBX_CITY]}, {best_match[CBX_STATE]}, {best_match[CBX_ZIP]}, {best_match[CBX_COUNTRY]}, {best_match[CBX_EMAIL]}, {best_match[CBX_FISTNAME]} {best_match[CBX_LASTNAME]} --> CR{best_ratio_company}, AR{best_ratio_address}, CM{selected_contact_match}, HCC{hc_count}, M[{best_match[CBX_MODULES]}]\n\n>>> ALL CANDIDATES CONSIDERED:\n"
-                analysis_string = selected_match_info + analysis_string
-        
-        # Process the contractor based on match quality
-        if best_match and not is_ambiguous:
-                # Good match - populate CBX columns and use action() for proper categorization
-                match_data = add_analysis_data(hc_row, best_match, analysis_string)
-                
-                # Calculate is_qualified and expiration_date for action
-                hiring_clients_list = best_match[CBX_HIRING_CLIENT_NAMES].split(args.list_separator) if best_match[CBX_HIRING_CLIENT_NAMES] else []
-                hiring_clients_qstatus = best_match[CBX_HIRING_CLIENT_QSTATUS].split(args.list_separator) if best_match[CBX_HIRING_CLIENT_QSTATUS] else []
-                is_qualified = False
-                for idx, val in enumerate(hiring_clients_list):
-                    if val == hc_row[HC_HIRING_CLIENT_NAME] and idx < len(hiring_clients_qstatus):
-                        status = hiring_clients_qstatus[idx].lower().strip()
-                        # Check for APPROVED/QUALIFIED statuses (as per user feedback)
-                        if status in ('validated', 'validate', 'valid', 'approved', 'approve', 'qualified', 'active'):
-                            is_qualified = True
-                            break
-                        # Handle NOT APPROVED/PENDING statuses  
-                        elif status in ('not approved', 'not_approved', 'pending', 'pending approval', 'under review', 'in progress', 'expired', 'exprired'):
-                            is_qualified = False
-                            break
-                
-                # Safe date parsing with proper exception handling
-                expiration_date = None
-                if best_match[CBX_EXPIRATION_DATE]:
-                    try:
-                        expiration_date = datetime.strptime(best_match[CBX_EXPIRATION_DATE], "%d/%m/%y")
-                    except ValueError:
-                        try:
-                            expiration_date = datetime.strptime(best_match[CBX_EXPIRATION_DATE], "%d/%m/%Y")
-                        except ValueError:
-                            print(f"WARNING: Could not parse expiration date: {best_match[CBX_EXPIRATION_DATE]}")
-                            expiration_date = None
-                
-                # Calculate the action using the action() function
-                create = False  # We found a match
-                wave = action(hc_row, match_data, create, False, expiration_date, is_qualified, args.ignore_warnings)
-                match_data['action'] = wave
-                
-                # Build output row with CBX data populated
-                output_row = hc_row[:HC_HEADER_LENGTH]
-                cbx_map = {
-                    'cbx_contractor': 'company',
-                    'cbx_street': 'address',
-                    'cbx_city': 'city',
-                    'cbx_state': 'state',
-                    'cbx_zip': 'zip',
-                    'cbx_country': 'country',
-                    'cbx_expiration_date': 'expiration_date',
-                    'cbx_email': 'email',
-                    'cbx_first_name': 'first_name',
-                    'cbx_last_name': 'last_name',
-                    'cbx_account_type': 'account_type',
-                    'cbx_subscription_fee': 'subscription_price',
-                    'cbx_employee_price': 'employee_price',
-                    'cbx_assessment_level': 'cbx_assessment_level',
-                    'cbx_id': 'cbx_id',
-                    'modules': 'modules',
-                    'parents': 'parents',
-                    'previous': 'previous',
-                    'hiring_client_names': 'hiring_client_names',
-                    'hiring_client_count': 'hiring_client_count',
-                    'is_in_relationship': 'is_in_relationship',
-                    'is_qualified': 'is_qualified',
-                    'ratio_company': 'ratio_company',
-                    'ratio_address': 'ratio_address',
-                    'contact_match': 'contact_match',
-                    'new_product': 'new_product',
-                    'registration_status': 'registration_status',
-                    'suspended': 'suspended',
-                    'hc_contractor_summary': 'hc_contractor_summary',
-                    'analysis': 'analysis'
-                }
-                for col_name in analysis_headers:
-                    output_row.append(match_data.get(cbx_map.get(col_name, col_name), ''))
-                
-                # Set index for good matches - CRITICAL FIX
-                if 'index' in analysis_headers:
-                    output_row[HC_HEADER_LENGTH + analysis_headers.index('index')] = index + 1
-                    
-        elif best_match and is_ambiguous:
-                # Ambiguous match - only populate CBX data if contractor has relationship with hiring client
-                match_data = add_analysis_data(hc_row, best_match, analysis_string)
-                
-                # Check if this contractor has relationship with the hiring client
-                has_relationship = match_data.get('is_in_relationship', False)
-                
-                # Set the ambiguous flag in hc_row for action() function
-                temp_hc_row = hc_row[:]  # Create a copy
-                if HC_AMBIGUOUS < len(temp_hc_row):
-                    temp_hc_row[HC_AMBIGUOUS] = True
-                
-                # Only treat as existing contractor if they have a relationship
-                create = not has_relationship  # If has relationship, treat as existing (create=False)
-                wave = action(temp_hc_row, match_data, create, False, None, match_data.get('is_qualified', False), args.ignore_warnings)
-                match_data['action'] = wave
-                
-                # Build output row - populate CBX data only if contractor has relationship
-                output_row = hc_row[:HC_HEADER_LENGTH]
-                
-                if has_relationship:
-                    # Full CBX data population for contractors with relationships
-                    cbx_map = {
-                        'cbx_id': 'cbx_id',
-                        'hc_contractor_summary': 'hc_contractor_summary',
-                        'analysis': 'analysis',
-                        'cbx_contractor': 'cbx_contractor',
-                        'cbx_street': 'cbx_street',
-                        'cbx_city': 'cbx_city',
-                        'cbx_state': 'cbx_state',
-                        'cbx_zip': 'cbx_zip',
-                        'cbx_country': 'cbx_country',
-                        'cbx_expiration_date': 'cbx_expiration_date',
-                        'registration_status': 'registration_status',
-                        'suspended': 'suspended',
-                        'cbx_email': 'cbx_email',
-                        'cbx_first_name': 'cbx_first_name',
-                        'cbx_last_name': 'cbx_last_name',
-                        'modules': 'modules',
-                        'cbx_account_type': 'cbx_account_type',
-                        'cbx_subscription_fee': 'cbx_subscription_fee',
-                        'cbx_employee_price': 'cbx_employee_price',
-                        'parents': 'parents',
-                        'previous': 'previous',
-                        'hiring_client_names': 'hiring_client_names',
-                        'hiring_client_count': 'hiring_client_count',
-                        'is_in_relationship': 'is_in_relationship',
-                        'is_qualified': 'is_qualified',
-                        'ratio_company': 'ratio_company',
-                        'ratio_address': 'ratio_address',
-                        'contact_match': 'contact_match',
-                        'cbx_assessment_level': 'cbx_assessment_level',
-                        'new_product': 'new_product',
-                        'generic_domain': 'generic_domain',
-                        'match_count': 'match_count',
-                        'match_count_with_hc': 'match_count_with_hc',
-                        'is_subscription_upgrade': 'is_subscription_upgrade',
-                        'upgrade_price': 'upgrade_price',
-                        'prorated_upgrade_price': 'prorated_upgrade_price',
-                        'create_in_cbx': 'create_in_cbx',
-                        'action': 'action'
-                    }
-                    for col_name in analysis_headers:
-                        output_row.append(match_data.get(cbx_map.get(col_name, col_name), ''))
+                        contact_match = False
+                    cbx_zip = cbx_row[CBX_ZIP].replace(' ', '').upper()
+                    cbx_company_en = clean_company_name(cbx_row[CBX_COMPANY_EN])
+                    cbx_company_fr = clean_company_name(cbx_row[CBX_COMPANY_FR])
+                    cbx_parents = cbx_row[CBX_PARENTS]
+                    cbx_previous = cbx_row[CBX_COMPANY_OLD]
+                    cbx_address = normalize_address(cbx_row[CBX_ADDRESS])
+                    hc_address_norm = normalize_address(hc_address)
+                    # Partial word overlap logic for company name
+                    hc_words = set(clean_hc_company.split())
+                    cbx_words_fr = set(cbx_company_fr.split())
+                    cbx_words_en = set(cbx_company_en.split())
+                    partial_match_fr = len(hc_words & cbx_words_fr) / max(1, len(hc_words))
+                    partial_match_en = len(hc_words & cbx_words_en) / max(1, len(hc_words))
+                    partial_match = max(partial_match_fr, partial_match_en)
+                    ratio_company_fr = fuzz.token_sort_ratio(cbx_company_fr, clean_hc_company)
+                    ratio_company_en = fuzz.token_sort_ratio(cbx_company_en, clean_hc_company)
+                    if cbx_row[CBX_COUNTRY] != hc_row[HC_COUNTRY]:
+                        ratio_zip = ratio_address = 0.0
+                    else:
+                        ratio_zip = fuzz.ratio(cbx_zip, hc_zip)
+                        ratio_address = fuzz.token_sort_ratio(cbx_address, hc_address_norm)
+                        # If street and zip match well, ignore city difference
+                        if ratio_address >= 90 and ratio_zip >= 90:
+                            ratio_address = 100.0
+                    ratio_company = ratio_company_fr if ratio_company_fr > ratio_company_en else ratio_company_en
+                    ratio_previous = 0
+                    for item in cbx_previous.split(args.list_separator):
+                        if item in (cbx_row[CBX_COMPANY_EN], cbx_row[CBX_COMPANY_FR]):
+                            continue
+                        item = clean_company_name(item)
+                        ratio = fuzz.token_sort_ratio(item, clean_hc_company)
+                        ratio_previous = ratio if ratio > ratio_previous else ratio_previous
+                    ratio_company = ratio_previous if ratio_previous > ratio_company else ratio_company
+                    # Accept match if partial word overlap is high
+                    if (contact_match or partial_match >= 0.5 or (ratio_company >= float(args.ratio_company)
+                                          and ratio_address >= float(args.ratio_address))):
+                        matches.append(
+                            add_analysis_data(hc_row, cbx_row, ratio_company, ratio_address, contact_match))
+                    elif ratio_company >= 95.0 or (ratio_company >= float(args.ratio_company)
+                                                   and ratio_address >= float(args.ratio_address)):
+                        matches.append(
+                            add_analysis_data(hc_row, cbx_row, ratio_company, ratio_address, contact_match))
+        ids = []
+        best_match = 0
+        matches = sorted(matches, key=lambda x: (x["ratio_address"], x["ratio_company"], x['hiring_client_count']),
+                         reverse=True)
+        for item in matches[0:10]:
+            ids.append(f'{item["cbx_id"]}, {item["company"]}, {item["address"]}, {item["city"]}, {item["state"]} '
+                       f'{item["country"]} {item["zip"]}, {item["email"]}, {item["first_name"]} {item["last_name"]}'
+                       f' --> CR{item["ratio_company"]}, AR{item["ratio_address"]},'
+                       f' CM{item["contact_match"]}, HCC{item["hiring_client_count"]}, M[{item["modules"]}]')
+        # append matching results to the hc_list
+        match_data = []
+        uniques_cbx_id = set(item['cbx_id'] for item in matches)
+        subscription_upgrade = False
+        upgrade_price = 0.00
+        prorated_upgrade_price = 0.00
+        if uniques_cbx_id:
+            for key, value in matches[0].items():
+                match_data.append(value)
+            hc_row.extend(match_data)
+            hc_row.append(True if hc_domain in GENERIC_DOMAIN else False)
+            hc_row.append(len(uniques_cbx_id) if len(uniques_cbx_id) else '')
+            hc_row.append(len([i for i in matches if i['hiring_client_count'] > 0]))
+            hc_row[HC_HEADER_LENGTH + analysis_headers.index("analysis")] = ('\n'.join(ids))
+            # Calculate subscription upgrade and prorating
+            if hc_row[HC_BASE_SUBSCRIPTION_FEE] == '':
+                base_subscription_fee = CBX_DEFAULT_STANDARD_SUBSCRIPTION
+                print(f'WARNING: no subscription fee defined for {hc_row[HC_COMPANY]}, using default {base_subscription_fee}')
+            else:
+                base_subscription_fee = hc_row[HC_BASE_SUBSCRIPTION_FEE]
+            current_sub_total = matches[0]['subscription_price'] + matches[0]['employee_price']
+            price_diff = float(base_subscription_fee) - current_sub_total
+            if price_diff > 0 and matches[0]['registration_status'] == 'Active' and matches[0]['expiration_date'] \
+                    and current_sub_total > 0.0:
+                subscription_upgrade = True
+                upgrade_price = price_diff
+                expiration_date = matches[0]['expiration_date']
+                now = datetime.now()
+                if expiration_date > now:
+                    delta = expiration_date - now
+                    days = delta.days if delta.days < 365 else 365
+                    prorated_upgrade_price = days / 365 * upgrade_price
                 else:
-                    # Limited data for ambiguous matches without relationships
-                    analysis_only_map = {
-                        'ratio_company': 'ratio_company',
-                        'ratio_address': 'ratio_address', 
-                        'contact_match': 'contact_match',
-                        'analysis': 'analysis',
-                        'action': 'action',
-                        'is_in_relationship': 'is_in_relationship',
-                        'is_qualified': 'is_qualified'
-                    }
-                    
-                    for col_name in analysis_headers:
-                        if col_name.startswith('cbx_'):
-                            # Keep CBX columns empty for ambiguous matches without relationships
-                            output_row.append('')
-                        elif col_name in analysis_only_map:
-                            output_row.append(match_data.get(analysis_only_map[col_name], ''))
-                        else:
-                            # Other columns - populate if available in match_data
-                            output_row.append(match_data.get(col_name, ''))
-                
-                # Set index for ambiguous matches
-                if 'index' in analysis_headers:
-                    output_row[HC_HEADER_LENGTH + analysis_headers.index('index')] = index + 1
-                
+                    prorated_upgrade_price = upgrade_price
+                if smart_boolean(hc_row[HC_IS_ASSOCIATION_FEE]):
+                    upgrade_price += 100.0
+                    prorated_upgrade_price += 100
+            if matches[0]['account_type'] in ('elearning', 'plan_nord', 'portail_pfr', 'special'):
+                subscription_upgrade = True
+                prorated_upgrade_price = upgrade_price = hc_row[HC_BASE_SUBSCRIPTION_FEE]
+            # print(f'CBX Assessment Level: {matches[0]["cbx_assessment_level"]}.  Requested Assesssment Level: {parse_assessment_level(hc_row[HC_ASSESSMENT_LEVEL])}')
+            if parse_assessment_level(matches[0]['cbx_assessment_level']) < parse_assessment_level(hc_row[HC_ASSESSMENT_LEVEL]):
+                # print("Assessment level upgrade")
+                subscription_upgrade = True
+                prorated_upgrade_price = upgrade_price
         else:
-            # No match found - treat as create=True and use action() function
-            create = True
-            wave = action(hc_row, None, create, False, None, False, args.ignore_warnings)
-            
-            # Build output row with empty analysis columns
-            output_row = hc_row[:HC_HEADER_LENGTH]
-            for _ in analysis_headers:
-                output_row.append('')
-            
-            # Set action and index with safe column access
-            if 'action' in analysis_headers:
-                output_row[HC_HEADER_LENGTH + analysis_headers.index('action')] = wave
-            if 'index' in analysis_headers:
-                output_row[HC_HEADER_LENGTH + analysis_headers.index('index')] = index + 1
-        
-        # Add metadata columns if they exist
-        if metadata_indexes:
-            metadata_array = []
-            for md_index in metadata_indexes:
-                metadata_array.insert(0, hc_row[md_index])
-            output_row += metadata_array
-        
-        # Save the processed row
-        hc_data[index] = output_row
-        out_ws.append(output_row)
-            
+            hc_row.extend(['' for x in range(len(analysis_headers)-6)])
+        create_in_cognibox = False if len(uniques_cbx_id) and not hc_row[HC_AMBIGUOUS] else True
+        hc_row.append(subscription_upgrade)
+        hc_row.append(upgrade_price)
+        hc_row.append(prorated_upgrade_price)
+        hc_row.append(create_in_cognibox)
+        hc_row.append(action(hc_row, matches[0] if len(matches) else {}, create_in_cognibox,
+                             subscription_upgrade, matches[0]['expiration_date'] if len(matches) else None,
+                             matches[0]['is_qualified'] if len(matches) else False, args.ignore_warnings))
+        hc_row.append(index+1)
+        metadata_array = []
+        for md_index in metadata_indexes:
+            metadata_array.insert(0, hc_row.pop(md_index))
+        hc_row.extend(metadata_array)
+        for i, value in enumerate(hc_row):
+            out_ws.cell(index+2, i+1, value)
+        if index % 10:
+            out_wb.save(filename=output_file)
+        print(f'{index+1} of {total} [{len(uniques_cbx_id)} found]')
+
     out_wb.save(filename=output_file)
 
     hc_onboarding = filter(lambda x: x[HC_HEADER_LENGTH+len(analysis_headers)-2] == 'onboarding', hc_data)
@@ -1401,7 +839,7 @@ if __name__ == '__main__':
                 column += 1
                 out_ws_existing_contractors.cell(index + 2, column, value)
 
-    hc_onboarding_rd = filter(lambda x: x[HC_HEADER_LENGTH+len(analysis_headers)-2] == 'add_questionnaire',
+    hc_onboarding_rd = filter(lambda x: x[HC_HEADER_LENGTH+len(analysis_headers)-2] == 'onboarding',
                               hc_data)
     for index, row in enumerate(hc_onboarding_rd):
         column = 0
