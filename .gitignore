@@ -2,4 +2,6 @@
 ~$
 .xslx
 .csv
+data/
+/data/*
 .DS_Store
