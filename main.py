@@ -1,6 +1,16 @@
+def normalize_postal_code(code):
+    if not code:
+        return ''
+    import unicodedata
+    code = str(code).strip().upper()
+    code = unicodedata.normalize('NFKD', code)
+    code = ''.join([c for c in code if not unicodedata.combining(c)])
+    code = re.sub(r'[^A-Z0-9]', '', code)
+    return code
 import argparse
 import csv
 import re
+import unicodedata
 import openpyxl
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.utils import get_column_letter
@@ -31,15 +41,37 @@ HC_COMPANY, HC_FIRSTNAME, HC_LASTNAME, HC_EMAIL, HC_CONTACT_PHONE, HC_CONTACT_LA
 
 SUPPORTED_CURRENCIES = ('CAD', 'USD')
 
-def normalize_postal_code(code):
-    if not code:
+def normalize_address(address):
+    """Normalize address for exact matching comparison."""
+    if not address:
         return ''
-    import unicodedata
-    code = str(code).strip().upper()
-    code = unicodedata.normalize('NFKD', code)
-    code = ''.join([c for c in code if not unicodedata.combining(c)])
-    code = re.sub(r'[^A-Z0-9]', '', code)
-    return code
+    # Normalize unicode, remove extra spaces, standardize punctuation
+    normalized = unicodedata.normalize('NFKD', str(address).strip().lower())
+    normalized = ''.join([c for c in normalized if not unicodedata.combining(c)])
+    # Standardize common address abbreviations and punctuation
+    normalized = re.sub(r'\bboul\.?\b', 'boulevard', normalized)
+    normalized = re.sub(r'\brue\b', 'street', normalized) 
+    normalized = re.sub(r'\bste\.?\b', 'suite', normalized)
+    normalized = re.sub(r'\bbur\.?\b', 'bureau', normalized)
+    normalized = re.sub(r'[^\w\s]', ' ', normalized)  # Remove punctuation
+    normalized = re.sub(r'\s+', ' ', normalized).strip()  # Normalize spaces
+    return normalized
+
+def parse_address_components(address):
+    """Parse address into components for city/province extraction."""
+    if not address:
+        return {'address': '', 'city': '', 'province': ''}
+    
+    # Simple parsing - look for common patterns
+    # This is a basic implementation, could be enhanced with more sophisticated parsing
+    parts = str(address).split(',')
+    if len(parts) >= 2:
+        return {
+            'address': parts[0].strip(),
+            'city': parts[-2].strip() if len(parts) > 2 else '',
+            'province': parts[-1].strip().split()[0] if parts[-1].strip() else ''
+        }
+    return {'address': address.strip(), 'city': '', 'province': ''}
 
 def calculate_location_bonus(input_address, input_city, input_province, candidate_address, candidate_city, candidate_province, input_country=None, candidate_country=None):
     """Calculate location proximity bonus for business scoring."""
@@ -73,22 +105,67 @@ def calculate_location_bonus(input_address, input_city, input_province, candidat
         
     return 0
 
-def normalize_address(address):
-    """Normalize address for exact matching comparison."""
-    if not address:
-        return ''
-    # Normalize unicode, remove extra spaces, standardize punctuation
-    import unicodedata
-    normalized = unicodedata.normalize('NFKD', str(address).strip().lower())
-    normalized = ''.join([c for c in normalized if not unicodedata.combining(c)])
-    # Standardize common address abbreviations and punctuation
-    normalized = re.sub(r'\bboul\.?\b', 'boulevard', normalized)
-    normalized = re.sub(r'\brue\b', 'street', normalized) 
-    normalized = re.sub(r'\bste\.?\b', 'suite', normalized)
-    normalized = re.sub(r'\bbur\.?\b', 'bureau', normalized)
-    normalized = re.sub(r'[^\w\s]', ' ', normalized)  # Remove punctuation
-    normalized = re.sub(r'\s+', ' ', normalized).strip()  # Normalize spaces
-    return normalized
+def fuzzy_match_hiring_client(input_client, candidate_clients_list):
+    """
+    Fuzzy match hiring client names to handle variations like:
+    'Aéroports de Montréal' vs 'ADM' or 'Inc.' vs 'Inc' differences
+    """
+    if not input_client or not candidate_clients_list:
+        return False, None
+        
+    input_client = str(input_client).strip()
+    if not input_client:
+        return False, None
+    
+    # First try exact match
+    for client in candidate_clients_list:
+        if input_client == client:
+            return True, client
+    
+    # Try case-insensitive exact match
+    input_lower = input_client.lower()
+    for client in candidate_clients_list:
+        if input_lower == str(client).lower():
+            return True, client
+    
+    # Try contains match (input contained in candidate or vice versa)
+    for client in candidate_clients_list:
+        client_str = str(client)
+        if input_client in client_str or client_str in input_client:
+            return True, client
+    
+    # Try fuzzy matching with normalized names
+    input_normalized = clean_company_name(input_client)
+    for client in candidate_clients_list:
+        client_normalized = clean_company_name(str(client))
+        
+        # High threshold fuzzy match
+        if fuzz.ratio(input_normalized, client_normalized) >= 85:
+            return True, client
+            
+        # Check for common abbreviations
+        if is_likely_abbreviation_match(input_normalized, client_normalized):
+            return True, client
+    
+    return False, None
+
+def is_likely_abbreviation_match(name1, name2):
+    """Check if one name is likely an abbreviation of another."""
+    # Extract first letters of words for abbreviation matching
+    def get_abbreviation(name):
+        words = re.findall(r'\b\w+', name.upper())
+        return ''.join(word[0] for word in words if len(word) > 2)  # Skip short words
+    
+    abbrev1 = get_abbreviation(name1)
+    abbrev2 = get_abbreviation(name2)
+    
+    # Check if one is abbreviation of the other
+    if len(abbrev1) >= 2 and len(abbrev2) >= 2:
+        return (abbrev1 in name2.upper().replace(' ', '') or 
+                abbrev2 in name1.upper().replace(' ', '') or
+                abbrev1 == abbrev2)
+    
+    return False
 
 assessment_levels = {
     "gold": 2,
@@ -219,8 +296,8 @@ parser.add_argument('--hc_list_offset', dest='hc_list_offset', action='store',
                          'This includes the headers')
 
 parser.add_argument('--min_company_match_ratio', dest='ratio_company', action='store',
-                    default=80,
-                    help='Minimum match ratio for contractors, between 0 and 100 (default 80)')
+                    default=70,
+                    help='Minimum match ratio for contractors, between 0 and 100 (default 70)')
 
 parser.add_argument('--min_address_match_ratio', dest='ratio_address', action='store',
                     default=80,
@@ -264,16 +341,24 @@ def smart_boolean(bool_data):
 
 
 # noinspection PyShadowingNames
-
 def add_analysis_data(hc_row, cbx_row, analysis_string='', ratio_company=0, ratio_address=0, contact_match=False):
     cbx_company = cbx_row[CBX_COMPANY_FR] if cbx_row[CBX_COMPANY_FR] else cbx_row[CBX_COMPANY_EN]
-    hc_email = hc_row[HC_EMAIL] if HC_EMAIL < len(hc_row) else ''
-    print('   --> ', cbx_company, hc_email, cbx_row[CBX_ID], ratio_company, ratio_address, contact_match)
-    hiring_clients_list = cbx_row[CBX_HIRING_CLIENT_NAMES].split(args.list_separator)
-    hiring_clients_qstatus = cbx_row[CBX_HIRING_CLIENT_QSTATUS].split(args.list_separator)
-    hc_count = len(hiring_clients_list) if cbx_row[CBX_HIRING_CLIENT_NAMES] else 0
-    is_in_relationship = True if (
-            hc_row[HC_HIRING_CLIENT_NAME] in hiring_clients_list and hc_row[HC_HIRING_CLIENT_NAME]) else False
+    # print debug removed, hc_email not defined here
+    # Parse hiring client data with improved fuzzy matching and data quality fixes
+    hiring_clients_list = cbx_row[CBX_HIRING_CLIENT_NAMES].split(args.list_separator) if cbx_row[CBX_HIRING_CLIENT_NAMES] else []
+    hiring_clients_qstatus = cbx_row[CBX_HIRING_CLIENT_QSTATUS].split(args.list_separator) if cbx_row[CBX_HIRING_CLIENT_QSTATUS] else []
+    
+    # Validate array lengths and log mismatches
+    hc_count = len(hiring_clients_list)
+    if len(hiring_clients_list) != len(hiring_clients_qstatus) and hiring_clients_qstatus:
+        print(f'WARNING: Array length mismatch for CBX ID {cbx_row[CBX_ID]}: {len(hiring_clients_list)} clients vs {len(hiring_clients_qstatus)} statuses')
+        # Pad shorter array with empty values
+        max_len = max(len(hiring_clients_list), len(hiring_clients_qstatus))
+        hiring_clients_list.extend([''] * (max_len - len(hiring_clients_list)))
+        hiring_clients_qstatus.extend([''] * (max_len - len(hiring_clients_qstatus)))
+    
+    # Use fuzzy matching for hiring client relationship detection
+    is_in_relationship, matched_client = fuzzy_match_hiring_client(hc_row[HC_HIRING_CLIENT_NAME], hiring_clients_list)
     is_qualified = False
     sub_price_usd = float(cbx_row[CBX_SUB_PRICE_USD]) if cbx_row[CBX_SUB_PRICE_USD] else 0.0
     employee_price_usd = float(cbx_row[CBX_EMPL_PRICE_USD]) if cbx_row[CBX_EMPL_PRICE_USD] else 0.0
@@ -283,10 +368,23 @@ def add_analysis_data(hc_row, cbx_row, analysis_string='', ratio_company=0, rati
 
     if hc_row[HC_CONTACT_CURRENCY] != '' and hc_row[HC_CONTACT_CURRENCY] not in SUPPORTED_CURRENCIES:
         raise AssertionError(f'Invalid currency: {hc_row[HC_CONTACT_CURRENCY]}, must be in {SUPPORTED_CURRENCIES}')
-    for idx, val in enumerate(hiring_clients_list):
-        if val == hc_row[HC_HIRING_CLIENT_NAME] and hiring_clients_qstatus[idx] == 'validated':
-            is_qualified = True
-            break
+    # Check qualification status with improved matching and data quality fixes
+    if is_in_relationship and matched_client:
+        for idx, client in enumerate(hiring_clients_list):
+            if (client == matched_client and idx < len(hiring_clients_qstatus)):
+                status = hiring_clients_qstatus[idx].lower().strip()
+                # Fix common typos and variations for APPROVED/QUALIFIED statuses
+                if status in ('validated', 'validate', 'valid', 'approved', 'approve', 'qualified', 'active'):
+                    is_qualified = True
+                    break
+                # Handle EXPIRED statuses
+                elif status in ('exprired', 'expired', 'expire'):
+                    is_qualified = False  # Expired means not currently qualified
+                    break
+                # Handle NOT APPROVED/PENDING statuses
+                elif status in ('not approved', 'not_approved', 'pending', 'pending approval', 'under review', 'in progress'):
+                    is_qualified = False  # Needs follow-up qualification
+                    break
     try:
         expiration_date = datetime.strptime(cbx_row[CBX_EXPIRATION_DATE],
                                         "%d/%m/%y") if cbx_row[CBX_EXPIRATION_DATE] else None
@@ -294,9 +392,9 @@ def add_analysis_data(hc_row, cbx_row, analysis_string='', ratio_company=0, rati
         expiration_date = datetime.strptime(cbx_row[CBX_EXPIRATION_DATE],
                                         "%d/%m/%Y") if cbx_row[CBX_EXPIRATION_DATE] else None
 
-    return {'cbx_id': int(cbx_row[CBX_ID]), 'hc_contractor_summary': hiring_client_contractor_summary, 'analysis':'', 'company': cbx_company, 'address': cbx_row[CBX_ADDRESS],
+    return {'cbx_id': int(cbx_row[CBX_ID]), 'hc_contractor_summary': hiring_client_contractor_summary, 'analysis': analysis_string, 'company': cbx_company, 'address': cbx_row[CBX_ADDRESS],
             'city': cbx_row[CBX_CITY], 'state': cbx_row[CBX_STATE], 'zip': cbx_row[CBX_ZIP],
-            'country': cbx_row[CBX_COUNTRY], 'expiration_date': expiration_date,
+            'country': cbx_row[CBX_COUNTRY], 'expiration_date': expiration_date.strftime('%Y-%m-%d %H:%M:%S') if expiration_date else '',
             'registration_status': cbx_row[CBX_REGISTRATION_STATUS],
             'suspended': cbx_row[CBX_SUSPENDED], 'email': cbx_row[CBX_EMAIL], 'first_name': cbx_row[CBX_FISTNAME],
             'last_name': cbx_row[CBX_LASTNAME], 'modules': cbx_row[CBX_MODULES],
@@ -358,7 +456,19 @@ def action(hc_data, cbx_data, create, subscription_update, expiration_date, is_q
         if smart_boolean(hc_data[HC_IS_TAKE_OVER]):
             return 'activation_link'
         else:
-            if hc_data[HC_AMBIGUOUS]:
+            # PRIORITY FIX: If contractor has existing relationship, use relationship-based actions
+            # even if marked as ambiguous (this fixes the QSL International contractor issue)
+            if cbx_data and cbx_data.get('is_in_relationship', False):
+                if cbx_data.get('registration_status') == 'Active':
+                    if is_qualified:
+                        return 'already_qualified'
+                    else:
+                        return 'follow_up_qualification'
+                elif cbx_data.get('registration_status') == 'Suspended':
+                    return 'restore_suspended'
+                else:
+                    return 'add_questionnaire'
+            elif hc_data[HC_AMBIGUOUS]:
                 return 'ambiguous_onboarding'
             elif core_mandatory_provided(hc_data):
                 return 'onboarding'
@@ -424,8 +534,14 @@ def check_headers(headers, standards, ignore):
 
 
 def clean_company_name(name):
-    name = name.lower().replace('.', '').replace(',', '').strip()
+    import unicodedata
+    name = name.lower()
+    # Add Unicode normalization and accent removal (consistent with address normalization)
+    name = unicodedata.normalize('NFKD', name)
+    name = ''.join([c for c in name if not unicodedata.combining(c)])  # Remove accents
     name = re.sub(r"\([^()]*\)", "", name)
+    name = re.sub(r'[.,;:/\\]', ' ', name)
+    name = re.sub(r'[-_]', ' ', name)
     name = remove_generics(name)
     name = re.sub(r'\s+', ' ', name)
     # Remove generic legal suffixes AND common filler words that don't help matching
@@ -549,7 +665,8 @@ def normalize_address(addr):
     addr = addr.lower()
     addr = unicodedata.normalize('NFKD', addr)
     addr = ''.join([c for c in addr if not unicodedata.combining(c)])  # Remove accents
-    addr = re.sub(r'[.,\-]', ' ', addr)  # Remove punctuation and hyphens
+    addr = re.sub(r'[.,;:/\\]', ' ', addr)
+    addr = re.sub(r'[-_]', ' ', addr)
     # Convert French street types/directions to English and handle abbreviations
     translations = {
         'chemin': 'road',
@@ -582,9 +699,15 @@ def normalize_address(addr):
         addr = re.sub(rf'\b{fr}\b', en, addr)
     addr = re.sub(r'\s+', ' ', addr)
     addr = addr.strip()
-    # Remove duplicate words and sort for order-insensitive comparison
-    words = sorted(set(addr.split()))
-    return ' '.join(words)
+    # Keep suite/bureau info for strict matching
+    suite_keywords = ['app', 'appt', 'apartment', 'suite', 'ste', 'bureau', 'bur', 'office', 'ofc', 'room', 'rm', 'unit', 'lot', 'porte', 'door', 'etage', 'floor', 'niveau', 'level']
+    suite_info = [w for w in addr.split() if w in suite_keywords]
+    suite_mapping = {'bur': 'bureau', 'ste': 'suite', 'appt': 'suite', 'app': 'suite', 'etage': 'floor', 'niveau': 'floor', 'porte': 'door'}
+    suite_info = [suite_mapping.get(w, w) for w in suite_info]
+    words = [w for w in addr.split() if w not in ('appartement', 'apartment', 'building', 'immeuble', 'floor', 'etage', 'étage')]
+    words = sorted(set(words))
+    # Add suite/bureau info at the end for matching
+    return ' '.join(words + suite_info)
 
 
 def parse_assessment_level(level):
@@ -636,7 +759,7 @@ if __name__ == '__main__':
     print(f'Completed reading {len(cbx_data)} contractors.')
 
     print('Reading hiring client data file...')
-    hc_wb = openpyxl.load_workbook(hc_file, read_only=True, data_only=True)
+    hc_wb = openpyxl.load_workbook(hc_file, read_only=True, data_only=False)
     if args.hc_list_sheet_name:
         hc_sheet = hc_wb.get_sheet_by_name(args.hc_list_sheet_name)
     else:
@@ -659,7 +782,7 @@ if __name__ == '__main__':
         # retrieve
         if not row[0].value:
             continue
-        hc_data.append([cell.value if cell.value is not None else '' for cell in row])
+        hc_data.append([str(cell.value) if cell.value is not None else '' for cell in row])
     total = len(hc_data) - 1
     metadata_indexes = []
     headers = []
@@ -685,11 +808,11 @@ if __name__ == '__main__':
             # Ignore extra columns: only process expected columns, leave extras untouched
             # Trim whitespace from all fields
             row = [str(cell).strip() if cell is not None else '' for cell in row]
-            # Ensure company name and address are UTF-8 encoded and normalized
+            # Ensure company name and address are properly Unicode normalized
             if row[HC_COMPANY]:
-                row[HC_COMPANY] = row[HC_COMPANY].encode('utf-8', errors='ignore').decode('utf-8')
+                row[HC_COMPANY] = unicodedata.normalize('NFC', row[HC_COMPANY])
             if row[HC_STREET]:
-                row[HC_STREET] = row[HC_STREET].encode('utf-8', errors='ignore').decode('utf-8')
+                row[HC_STREET] = unicodedata.normalize('NFC', row[HC_STREET])
             # Existing normalization logic
             if row[HC_COUNTRY].lower().strip() == 'ca':
                 if row[HC_CONTACT_CURRENCY].lower().strip() not in ('cad', ''):
@@ -1377,9 +1500,32 @@ if __name__ == '__main__':
                     }
                     for col_name in analysis_headers:
                         output_row.append(match_data.get(cbx_map.get(col_name, col_name), ''))
-                    # Set index for ambiguous matches
-                    if 'index' in analysis_headers:
-                        output_row[HC_HEADER_LENGTH + analysis_headers.index('index')] = index + 1
+                else:
+                    # Limited data for ambiguous matches without relationships
+                    analysis_only_map = {
+                        'ratio_company': 'ratio_company',
+                        'ratio_address': 'ratio_address', 
+                        'contact_match': 'contact_match',
+                        'analysis': 'analysis',
+                        'action': 'action',
+                        'is_in_relationship': 'is_in_relationship',
+                        'is_qualified': 'is_qualified'
+                    }
+                    
+                    for col_name in analysis_headers:
+                        if col_name.startswith('cbx_'):
+                            # Keep CBX columns empty for ambiguous matches without relationships
+                            output_row.append('')
+                        elif col_name in analysis_only_map:
+                            output_row.append(match_data.get(analysis_only_map[col_name], ''))
+                        else:
+                            # Other columns - populate if available in match_data
+                            output_row.append(match_data.get(col_name, ''))
+                
+                # Set index for ambiguous matches
+                if 'index' in analysis_headers:
+                    output_row[HC_HEADER_LENGTH + analysis_headers.index('index')] = index + 1
+                
         else:
             # No match found - before marking as missing_info, try company-only matching
             print(f"  -> No fuzzy match found - attempting company-only matching for missing contact info")
@@ -1578,7 +1724,7 @@ if __name__ == '__main__':
                 column += 1
                 out_ws_existing_contractors.cell(index + 2, column, value)
 
-    hc_onboarding_rd = filter(lambda x: x[HC_HEADER_LENGTH+len(analysis_headers)-2] == 'onboarding',
+    hc_onboarding_rd = filter(lambda x: x[HC_HEADER_LENGTH+len(analysis_headers)-2] == 'add_questionnaire',
                               hc_data)
     for index, row in enumerate(hc_onboarding_rd):
         column = 0
