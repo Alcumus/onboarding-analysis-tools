@@ -31,6 +31,65 @@ HC_COMPANY, HC_FIRSTNAME, HC_LASTNAME, HC_EMAIL, HC_CONTACT_PHONE, HC_CONTACT_LA
 
 SUPPORTED_CURRENCIES = ('CAD', 'USD')
 
+def normalize_postal_code(code):
+    if not code:
+        return ''
+    import unicodedata
+    code = str(code).strip().upper()
+    code = unicodedata.normalize('NFKD', code)
+    code = ''.join([c for c in code if not unicodedata.combining(c)])
+    code = re.sub(r'[^A-Z0-9]', '', code)
+    return code
+
+def calculate_location_bonus(input_address, input_city, input_province, candidate_address, candidate_city, candidate_province, input_country=None, candidate_country=None):
+    """Calculate location proximity bonus for business scoring."""
+    if not input_address or not candidate_address:
+        return 0
+        
+    # Exact address match (same building/suite)
+    if normalize_address(input_address) == normalize_address(candidate_address):
+        return 25  # Increased from 20
+    
+    # Same city match
+    if (input_city and candidate_city and 
+        input_city.lower().strip() == candidate_city.lower().strip()):
+        return 15  # Increased from 10
+        
+    # Same province/state match
+    if (input_province and candidate_province and 
+        input_province.lower().strip() == candidate_province.lower().strip()):
+        return 10  # Increased from 5
+        
+    # Same country match (important for international vs domestic)
+    if (input_country and candidate_country and 
+        input_country.lower().strip() == candidate_country.lower().strip()):
+        return 8   # Country match bonus
+        
+    # PENALTY: International mismatch (domestic contractor vs international candidate)
+    # This helps prevent Canadian contractors from being matched to Swiss/other international companies
+    if (input_country and candidate_country and 
+        input_country.lower().strip() != candidate_country.lower().strip()):
+        return -15  # Heavy penalty for country mismatch
+        
+    return 0
+
+def normalize_address(address):
+    """Normalize address for exact matching comparison."""
+    if not address:
+        return ''
+    # Normalize unicode, remove extra spaces, standardize punctuation
+    import unicodedata
+    normalized = unicodedata.normalize('NFKD', str(address).strip().lower())
+    normalized = ''.join([c for c in normalized if not unicodedata.combining(c)])
+    # Standardize common address abbreviations and punctuation
+    normalized = re.sub(r'\bboul\.?\b', 'boulevard', normalized)
+    normalized = re.sub(r'\brue\b', 'street', normalized) 
+    normalized = re.sub(r'\bste\.?\b', 'suite', normalized)
+    normalized = re.sub(r'\bbur\.?\b', 'bureau', normalized)
+    normalized = re.sub(r'[^\w\s]', ' ', normalized)  # Remove punctuation
+    normalized = re.sub(r'\s+', ' ', normalized).strip()  # Normalize spaces
+    return normalized
+
 assessment_levels = {
     "gold": 2,
     "silver": 2,
@@ -208,6 +267,7 @@ def smart_boolean(bool_data):
 
 def add_analysis_data(hc_row, cbx_row, analysis_string='', ratio_company=0, ratio_address=0, contact_match=False):
     cbx_company = cbx_row[CBX_COMPANY_FR] if cbx_row[CBX_COMPANY_FR] else cbx_row[CBX_COMPANY_EN]
+    hc_email = hc_row[HC_EMAIL] if HC_EMAIL < len(hc_row) else ''
     print('   --> ', cbx_company, hc_email, cbx_row[CBX_ID], ratio_company, ratio_address, contact_match)
     hiring_clients_list = cbx_row[CBX_HIRING_CLIENT_NAMES].split(args.list_separator)
     hiring_clients_qstatus = cbx_row[CBX_HIRING_CLIENT_QSTATUS].split(args.list_separator)
@@ -1317,19 +1377,9 @@ if __name__ == '__main__':
                     }
                     for col_name in analysis_headers:
                         output_row.append(match_data.get(cbx_map.get(col_name, col_name), ''))
-                else:
-                    prorated_upgrade_price = upgrade_price
-                if smart_boolean(hc_row[HC_IS_ASSOCIATION_FEE]):
-                    upgrade_price += 100.0
-                    prorated_upgrade_price += 100
-            if matches[0]['account_type'] in ('elearning', 'plan_nord', 'portail_pfr', 'special'):
-                subscription_upgrade = True
-                prorated_upgrade_price = upgrade_price = hc_row[HC_BASE_SUBSCRIPTION_FEE]
-            # print(f'CBX Assessment Level: {matches[0]["cbx_assessment_level"]}.  Requested Assesssment Level: {parse_assessment_level(hc_row[HC_ASSESSMENT_LEVEL])}')
-            if parse_assessment_level(matches[0]['cbx_assessment_level']) < parse_assessment_level(hc_row[HC_ASSESSMENT_LEVEL]):
-                # print("Assessment level upgrade")
-                subscription_upgrade = True
-                prorated_upgrade_price = upgrade_price
+                    # Set index for ambiguous matches
+                    if 'index' in analysis_headers:
+                        output_row[HC_HEADER_LENGTH + analysis_headers.index('index')] = index + 1
         else:
             # No match found - before marking as missing_info, try company-only matching
             print(f"  -> No fuzzy match found - attempting company-only matching for missing contact info")
