@@ -949,17 +949,120 @@ if __name__ == '__main__':
         best_ratio_company = 0
         best_ratio_address = 0
         
-        # CRITICAL: Check HC_DO_NOT_MATCH flag - if True, don't match but mark as missing_info
+        # CRITICAL: Check HC_DO_NOT_MATCH flag - if True, check mandatory fields first, then try company matching
         if smart_boolean(hc_row[HC_DO_NOT_MATCH]):
-            print(f"  -> HC_DO_NOT_MATCH flag set - marking as missing_info without matching")
+            print(f"  -> HC_DO_NOT_MATCH flag set - checking mandatory fields first")
             
-            # Force missing_info for HC_DO_NOT_MATCH (based on baseline analysis)
-            wave = 'missing_info'
-            
-            # Build output row with empty analysis columns
-            output_row = hc_row[:HC_HEADER_LENGTH]
-            for _ in analysis_headers:
-                output_row.append('')
+            # Check if all mandatory fields are present
+            if core_mandatory_provided(hc_row):
+                print(f"     All mandatory fields present - marking as onboarding")
+                wave = 'onboarding'
+                
+                # Build output row with empty analysis columns (no CBX matching needed for complete records)
+                output_row = hc_row[:HC_HEADER_LENGTH]
+                for _ in analysis_headers:
+                    output_row.append('')
+                analysis_string = 'Complete HC record - no CBX matching required'
+            else:
+                print(f"     Missing mandatory fields - attempting company-only fuzzy matching")
+                
+                # Try fuzzy company matching even with missing fields
+                hc_company = hc_row[HC_COMPANY]
+                clean_hc_company = clean_company_name(hc_company)
+                
+                best_company_match = None
+                best_company_score = 0
+                company_analysis = f"Company-only matching attempt for: {hc_company}\n"
+                
+                # Simple company fuzzy matching loop
+                for cbx_row in cbx_data:
+                    cbx_company_en = clean_company_name(cbx_row[CBX_COMPANY_EN])
+                    cbx_company_fr = clean_company_name(cbx_row[CBX_COMPANY_FR])
+                    
+                    # Test both English and French company names
+                    for cbx_company in [cbx_company_en, cbx_company_fr]:
+                        if cbx_company.strip():
+                            # Use same fuzzy matching logic as main algorithm
+                            from fuzzywuzzy import fuzz
+                            ratio = fuzz.ratio(clean_hc_company, cbx_company)
+                            token_sort_ratio = fuzz.token_sort_ratio(clean_hc_company, cbx_company)
+                            token_set_ratio = fuzz.token_set_ratio(clean_hc_company, cbx_company)
+                            partial_ratio = fuzz.partial_ratio(clean_hc_company, cbx_company)
+                            
+                            # Use the maximum of all ratios (same as main algorithm)
+                            max_ratio = max(ratio, token_sort_ratio, token_set_ratio, partial_ratio)
+                            
+                            if max_ratio > best_company_score:
+                                best_company_score = max_ratio
+                                best_company_match = cbx_row
+                                company_analysis += f"Best match: {cbx_row[CBX_COMPANY_EN]} (Score: {max_ratio})\n"
+                
+                # If we found a good company match (>= 70), proceed with action logic
+                if best_company_score >= 70 and best_company_match:
+                    print(f"     Found company match: {best_company_match[CBX_COMPANY_EN]} (Score: {best_company_score})")
+                    
+                    # Create match_data dictionary similar to main matching logic
+                    match_data = {
+                        'company': best_company_match[CBX_COMPANY_EN],
+                        'email': best_company_match[CBX_EMAIL],
+                        'first_name': best_company_match[CBX_FISTNAME],  # Note: typo in original CBX_FISTNAME
+                        'last_name': best_company_match[CBX_LASTNAME],
+                        'registration_status': best_company_match[CBX_REGISTRATION_STATUS],
+                        'expiration_date': best_company_match[CBX_EXPIRATION_DATE],
+                        'is_qualified': False,  # Default to False for company-only matches
+                        'ratio_company': best_company_score,
+                        'ratio_address': 0
+                    }
+                    
+                    # Parse expiration date
+                    expiration_date = None
+                    if best_company_match[CBX_EXPIRATION_DATE]:
+                        try:
+                            expiration_date = datetime.strptime(best_company_match[CBX_EXPIRATION_DATE], '%Y-%m-%d')
+                        except (ValueError, TypeError):
+                            expiration_date = None
+                    
+                    # Determine action using normal business logic
+                    create = True  # Missing contact info means new contractor
+                    wave = action(hc_row, match_data, create, False, expiration_date, False, args.ignore_warnings)
+                    
+                    # Build analysis with company match details
+                    analysis_string = company_analysis + f"\nMatched CBX record: {best_company_match[CBX_COMPANY_EN]}\n"
+                    analysis_string += f"Registration Status: {best_company_match[CBX_REGISTRATION_STATUS]}\n"
+                    analysis_string += f"Contact: {best_company_match[CBX_FISTNAME]} {best_company_match[CBX_LASTNAME]} ({best_company_match[CBX_EMAIL]})\n"
+                    analysis_string += f"Company Match Score: {best_company_score}\n"
+                    analysis_string += f"NOTE: Missing contact info - proceeding with company match only"
+                    
+                    # Build output row with populated analysis
+                    output_row = hc_row[:HC_HEADER_LENGTH]
+                    for header in analysis_headers:
+                        if header == 'analysis':
+                            output_row.append(analysis_string)
+                        elif header == 'cbx_company_en':
+                            output_row.append(best_company_match[CBX_COMPANY_EN])
+                        elif header == 'cbx_company_fr':
+                            output_row.append(best_company_match[CBX_COMPANY_FR])
+                        elif header == 'cbx_contact_first':
+                            output_row.append(best_company_match[CBX_FISTNAME])
+                        elif header == 'cbx_contact_last':
+                            output_row.append(best_company_match[CBX_LASTNAME])
+                        elif header == 'cbx_contact_email':
+                            output_row.append(best_company_match[CBX_EMAIL])
+                        elif header == 'name_score':
+                            output_row.append(best_company_score)
+                        elif header == 'address_score':
+                            output_row.append(0)  # No address matching for company-only
+                        else:
+                            output_row.append('')
+                else:
+                    print(f"     No good company match found (best score: {best_company_score}) - marking as missing_info")
+                    wave = 'missing_info'
+                    
+                    # Build output row with empty analysis columns
+                    output_row = hc_row[:HC_HEADER_LENGTH]
+                    for _ in analysis_headers:
+                        output_row.append('')
+                    analysis_string = company_analysis + "No suitable company match found"
             
             # Set action and index with safe column access
             if 'action' in analysis_headers:
@@ -1147,13 +1250,13 @@ if __name__ == '__main__':
                         # FIXED: Prioritize hiring client relationships above all else, then verification and location
                         # Sort by: hc_count (relationship depth), contact_match, zip_match, address_score, business_score
                         perfect_matches = sorted(perfect_matches, key=lambda c: (
-                            c['hc_count'] > 0,            # Relationship exists (True > False)
-                            c['hc_count'],                # Relationship depth (more clients = stronger relationship)
-                            c['contact_match'],           # Contact verification 
-                            c['zip_match_strict'],        # Postal code accuracy
-                            c['address_score'],           # Address similarity
-                            c['business_score'],          # Business factors
-                            c['name_score']               # Name score
+                            int(c['hc_count'] > 0),       # Relationship exists (1 > 0)
+                            int(c['hc_count']),           # Relationship depth (more clients = stronger relationship)
+                            int(c['contact_match']) if isinstance(c['contact_match'], bool) else (1 if str(c['contact_match']).lower() == 'true' else 0),  # Contact verification 
+                            int(c['zip_match_strict']) if isinstance(c['zip_match_strict'], bool) else (1 if str(c['zip_match_strict']).lower() == 'true' else 0),  # Postal code accuracy
+                            float(c['address_score']) if c['address_score'] is not None else 0.0,  # Address similarity
+                            float(c['business_score']) if c['business_score'] is not None else 0.0,  # Business factors
+                            float(c['name_score']) if c['name_score'] is not None else 0.0  # Name score
                         ), reverse=True)
                         selected_candidate = perfect_matches[0]
                     else:
@@ -1162,12 +1265,12 @@ if __name__ == '__main__':
                         if high_company_matches:
                             # FIXED: Prioritize relationships even for high matches
                             high_company_matches = sorted(high_company_matches, key=lambda c: (
-                                c['hc_count'] > 0,        # Relationship exists
-                                c['hc_count'],            # Relationship depth
-                                c['contact_match'],       # Contact verification
-                                c['business_score'],      # Business factors
-                                c['name_score'],          # Company match quality
-                                c['address_score']        # Address match quality
+                                int(c['hc_count'] > 0),   # Relationship exists
+                                int(c['hc_count']),       # Relationship depth
+                                int(c['contact_match']) if isinstance(c['contact_match'], bool) else (1 if str(c['contact_match']).lower() == 'true' else 0),  # Contact verification
+                                float(c['business_score']) if c['business_score'] is not None else 0.0,  # Business factors
+                                float(c['name_score']) if c['name_score'] is not None else 0.0,  # Company match quality
+                                float(c['address_score']) if c['address_score'] is not None else 0.0  # Address match quality
                             ), reverse=True)
                             selected_candidate = high_company_matches[0]
                         else:
@@ -1190,8 +1293,8 @@ if __name__ == '__main__':
                                         candidate['address_score'] * 0.2        # Address match (20%)
                                     )
                                 combo_candidates = sorted(eligible_candidates, key=lambda c: (
-                                    c['hc_count'] > 0,        # Relationship exists (boolean priority)
-                                    c['combined_score']       # Then combined score
+                                    int(c['hc_count'] > 0),   # Relationship exists (boolean priority)
+                                    float(c['combined_score']) if c['combined_score'] is not None else 0.0  # Then combined score
                                 ), reverse=True)
                                 selected_candidate = combo_candidates[0]
         
@@ -1424,14 +1527,110 @@ if __name__ == '__main__':
                     output_row[HC_HEADER_LENGTH + analysis_headers.index('index')] = index + 1
                 
         else:
-            # No match found - treat as create=True and use action() function
-            create = True
-            wave = action(hc_row, None, create, False, None, False, args.ignore_warnings)
+            # No match found - before marking as missing_info, try company-only matching
+            print(f"  -> No fuzzy match found - attempting company-only matching for missing contact info")
             
-            # Build output row with empty analysis columns
-            output_row = hc_row[:HC_HEADER_LENGTH]
-            for _ in analysis_headers:
-                output_row.append('')
+            # Try company-only fuzzy matching similar to HC_DO_NOT_MATCH logic
+            hc_company = hc_row[HC_COMPANY]
+            clean_hc_company = clean_company_name(hc_company)
+            
+            best_company_match = None
+            best_company_score = 0
+            company_analysis = f"Company-only matching attempt for: {hc_company}\n"
+            
+            # Simple company fuzzy matching loop
+            for cbx_row in cbx_data:
+                cbx_company_en = clean_company_name(cbx_row[CBX_COMPANY_EN])
+                cbx_company_fr = clean_company_name(cbx_row[CBX_COMPANY_FR])
+                
+                # Test both English and French company names
+                for cbx_company in [cbx_company_en, cbx_company_fr]:
+                    if cbx_company.strip():
+                        # Use same fuzzy matching logic as main algorithm
+                        from fuzzywuzzy import fuzz
+                        ratio = fuzz.ratio(clean_hc_company, cbx_company)
+                        token_sort_ratio = fuzz.token_sort_ratio(clean_hc_company, cbx_company)
+                        token_set_ratio = fuzz.token_set_ratio(clean_hc_company, cbx_company)
+                        partial_ratio = fuzz.partial_ratio(clean_hc_company, cbx_company)
+                        
+                        # Use the maximum of all ratios (same as main algorithm)
+                        max_ratio = max(ratio, token_sort_ratio, token_set_ratio, partial_ratio)
+                        
+                        if max_ratio > best_company_score:
+                            best_company_score = max_ratio
+                            best_company_match = cbx_row
+                            company_analysis += f"Best match: {cbx_row[CBX_COMPANY_EN]} (Score: {max_ratio})\n"
+            
+            # If we found a good company match (>= 70), proceed with action logic
+            if best_company_score >= 70 and best_company_match:
+                print(f"     Found company match: {best_company_match[CBX_COMPANY_EN]} (Score: {best_company_score})")
+                
+                # Create match_data dictionary similar to main matching logic
+                match_data = {
+                    'company': best_company_match[CBX_COMPANY_EN],
+                    'email': best_company_match[CBX_EMAIL],
+                    'first_name': best_company_match[CBX_FISTNAME],  # Note: typo in original CBX_FISTNAME
+                    'last_name': best_company_match[CBX_LASTNAME],
+                    'registration_status': best_company_match[CBX_REGISTRATION_STATUS],
+                    'expiration_date': best_company_match[CBX_EXPIRATION_DATE],
+                    'is_qualified': False,  # Default to False for company-only matches
+                    'ratio_company': best_company_score,
+                    'ratio_address': 0
+                }
+                
+                # Parse expiration date
+                expiration_date = None
+                if best_company_match[CBX_EXPIRATION_DATE]:
+                    try:
+                        expiration_date = datetime.strptime(best_company_match[CBX_EXPIRATION_DATE], '%Y-%m-%d')
+                    except (ValueError, TypeError):
+                        expiration_date = None
+                
+                # Determine action using normal business logic
+                create = True  # Missing contact info means new contractor
+                wave = action(hc_row, match_data, create, False, expiration_date, False, args.ignore_warnings)
+                
+                # Build analysis with company match details
+                analysis_string = company_analysis + f"\nMatched CBX record: {best_company_match[CBX_COMPANY_EN]}\n"
+                analysis_string += f"Registration Status: {best_company_match[CBX_REGISTRATION_STATUS]}\n"
+                analysis_string += f"Contact: {best_company_match[CBX_FISTNAME]} {best_company_match[CBX_LASTNAME]} ({best_company_match[CBX_EMAIL]})\n"
+                analysis_string += f"Company Match Score: {best_company_score}\n"
+                analysis_string += f"NOTE: Missing contact info - proceeding with company match only"
+                
+                # Build output row with populated analysis
+                output_row = hc_row[:HC_HEADER_LENGTH]
+                for header in analysis_headers:
+                    if header == 'analysis':
+                        output_row.append(analysis_string)
+                    elif header == 'cbx_company_en':
+                        output_row.append(best_company_match[CBX_COMPANY_EN])
+                    elif header == 'cbx_company_fr':
+                        output_row.append(best_company_match[CBX_COMPANY_FR])
+                    elif header == 'cbx_contact_first':
+                        output_row.append(best_company_match[CBX_FISTNAME])
+                    elif header == 'cbx_contact_last':
+                        output_row.append(best_company_match[CBX_LASTNAME])
+                    elif header == 'cbx_contact_email':
+                        output_row.append(best_company_match[CBX_EMAIL])
+                    elif header == 'cbx_phone':
+                        output_row.append('')  # No phone field in CBX data
+                    elif header == 'name_score':
+                        output_row.append(best_company_score)
+                    elif header == 'address_score':
+                        output_row.append(0)  # No address matching for company-only
+                    else:
+                        output_row.append('')
+            else:
+                print(f"     No good company match found (best score: {best_company_score}) - marking as missing_info")
+                
+                # No company match found - treat as create=True and use action() function
+                create = True
+                wave = action(hc_row, None, create, False, None, False, args.ignore_warnings)
+                
+                # Build output row with empty analysis columns
+                output_row = hc_row[:HC_HEADER_LENGTH]
+                for _ in analysis_headers:
+                    output_row.append('')
             
             # Set action and index with safe column access
             if 'action' in analysis_headers:

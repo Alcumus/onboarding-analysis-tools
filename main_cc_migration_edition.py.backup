@@ -263,20 +263,15 @@ def core_mandatory_provided(hcd):
 
 # noinspection PyShadowingNames
 def action(hc_data, cbx_data, create, subscription_update, expiration_date, is_qualified, ignore):
-    print(f"DEBUG action(): create={create}, HC_IS_TAKE_OVER={hc_data[HC_IS_TAKE_OVER]}, HC_AMBIGUOUS={hc_data[HC_AMBIGUOUS]}")
     if create:
         if smart_boolean(hc_data[HC_IS_TAKE_OVER]):
-            print("DEBUG action(): returning activation_link (take_over=True)")
             return 'activation_link'
         else:
             if hc_data[HC_AMBIGUOUS]:
-                print("DEBUG action(): returning ambiguous_onboarding (ambiguous=True)")
                 return 'ambiguous_onboarding'
             elif core_mandatory_provided(hc_data):
-                print("DEBUG action(): returning onboarding (mandatory complete)")
                 return 'onboarding'
             else:
-                print("DEBUG action(): returning missing_info (mandatory incomplete)")
                 return 'missing_info'
     else:
         reg_status = cbx_data['registration_status']
