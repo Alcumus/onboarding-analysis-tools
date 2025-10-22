@@ -47,7 +47,7 @@ fi
 for i in $(seq 1 $num_chunks); do
     docker run --rm \
         -v $(pwd):/home/script/data \
-        $(docker build -t icm-$i -q https://${token}:@github.com/Alcumus/onboarding-analysis-tools.git#master) \
+        $(docker build -t icm-$i -q https://${token}:@github.com/Alcumus/onboarding-analysis-tools.git) \
         "$csv_file" "chunk_${i}.xlsx" "output_chunk_${i}.xlsx" &
 done
 wait
