@@ -8,7 +8,7 @@ WORKDIR /usr/src/
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-RUN apt-get update && apt-get upgrade -y && apt-get install -y netcat && apt-get clean && rm -rf /var/lib/apt/lists/*
+RUN apt --yes update && apt --yes upgrade && apt-get --yes install netcat
 
 # install dependencies
 RUN pip install --no-cache-dir --upgrade pip
