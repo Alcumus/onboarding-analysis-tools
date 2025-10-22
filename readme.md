@@ -12,10 +12,17 @@ __** Please note that virtualization must be enabled in your BIOS, you need to h
 
 2. Have git installed on your computer. to make sure git is installed properly run the command "git --version". (https://git-scm.com/)
 
+3. Have Python 3 installed and available in your PATH. To check, run `python3 --version` (WSL/macOS) or `python --version` (Windows/PowerShell). Download from https://www.python.org/downloads/
+   Install the required Python packages:
+   ```bash
+   pip install pandas openpyxl
+   ```
+   (Run in your shell or PowerShell)
+
 The hardest is done...
 
-3. Create a github account (free) https://github.com/signup and ask R&D to give you access to the repository
-4. create a personal token that you will use to access the repository https://github.com/settings/tokens and name it docker access (store your token securly)
+4. Create a github account (free) https://github.com/signup and ask R&D to give you access to the repository
+5. create a personal token that you will use to access the repository https://github.com/settings/tokens and name it docker access (store your token securly)
 
 ## Work to do in preparation to the analysis
 
@@ -31,9 +38,14 @@ The hardest is done...
 
 From Windows Powershell use the following (requires Docker)
 ```bash
+
 cd < path to the analysis folder >
 
+# Set your GitHub token as an environment variable
 $env:token = '<your personal github token to access the repository>'
+
+# For bash/zsh (WSL/macOS), use:
+# export GITHUB_TOKEN='<your personal github token to access the repository>'
 
 docker run --rm -it -v ${pwd}:/home/script/data $(docker build -t icm -q https://${env:token}:@github.com/Alcumus/onboarding-analysis-tools.git) <cbx_contractor_db_dump.csv> <hc_list.xlsx> <results.xlsx>
 ```
@@ -45,6 +57,52 @@ docker run --rm -it -v  ${pwd}:/home/script/data $(docker build -t icm -q https:
 ```
 
 __** Please note that the script doesn't actually support "paths" to the input/output files since it uses a "hack" to map the files into the docker container. Only use filename and make sure they are located where the script is ran from.__
+
+## Parallel Analysis Scripts
+
+For large datasets, you can use the provided scripts to automate splitting, parallel processing, merging, and formatting. These scripts require your GitHub token to be set as an environment variable:
+
+### Shell Script (WSL/macOS/Linux)
+
+Set your token:
+```bash
+export token='<your personal github token>'
+```
+
+Run the script:
+```bash
+chmod +x run_parallel_analysis.sh
+./run_parallel_analysis.sh <input_xlsx> <chunk_size> <csv_file> <output_file>
+```
+Example:
+```bash
+chmod +x run_parallel_analysis.sh
+./run_parallel_analysis.sh OCWAwave2.xlsx 50 OCT16.csv output_remote_master_formatted.xlsx
+```
+
+### PowerShell Script (Windows)
+
+Set your token:
+```powershell
+$env:token = '<your personal github token to access the repository>'
+```
+
+Run the script:
+```powershell
+./run_parallel_analysis.ps1 <input_xlsx> <chunk_size> <csv_file> <output_file>
+```
+Example:
+```powershell
+./run_parallel_analysis.ps1 OCWAwave2.xlsx 50 OCT16.csv output_remote_master_formatted.xlsx
+```
+
+Both scripts will:
+- Split the input Excel file into chunks of the specified size
+- Run parallel Docker containers for each chunk
+- Merge the output chunk files into a single Excel file
+- Format the final output file for analysis
+
+**Note:** The scripts require Docker, Python 3, pandas, and openpyxl to be installed. The GITHUB_TOKEN environment variable must be set before running.
 
 
 See the analysis [procedure documentation](ProcedureToProcessList.docx) and the hiring client Excel input file [template](hiring_client_input_template.xlsx).

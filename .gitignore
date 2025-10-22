@@ -1,7 +1,9 @@
 .idea
 ~$
-.xslx
-.csv
+"".xslx
+*.csv
 data/
 /data/*
 .DS_Store
+*_*.xlsx
+output_chunk_*.xlsx
