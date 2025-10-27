@@ -110,7 +110,7 @@ echo "Formatting merged output..."
 python3 format_excel.py output_remote_master.xlsx "$output_file"
 echo "✅ All steps completed. Final output: $output_file"
 echo "Cleaning up intermediate files..."
-rm -f data/chunk_*.xlsx
-rm -f data/output_chunk_*.xlsx
+rm -f chunk_*.xlsx
+rm -f output_chunk_*.xlsx
 rm -f output_remote_master.xlsx
 echo "Cleanup complete. Only $output_file retained."

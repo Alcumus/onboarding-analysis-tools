@@ -102,7 +102,5 @@ Write-Host "✅ All steps completed. Final output: $output_file"
 Write-Host "Cleaning up intermediate files..."
 Remove-Item -Force -ErrorAction SilentlyContinue chunk_*.xlsx
 Remove-Item -Force -ErrorAction SilentlyContinue output_chunk_*.xlsx
-Remove-Item -Force -ErrorAction SilentlyContinue chunk_*.xlsx
-Remove-Item -Force -ErrorAction SilentlyContinue output_chunk_*.xlsx
 Remove-Item -Force -ErrorAction SilentlyContinue output_remote_master.xlsx
 Write-Host "Cleanup complete. Only $output_file retained."
