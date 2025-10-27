@@ -75,32 +75,6 @@ fi
 wait
 echo "✅ All containers completed!"
 
-# echo "Running parallel analysis for $num_chunks chunks..."
-# if [[ -z "$token" ]]; then
-#     echo "Error: GITHUB_TOKEN environment variable is not set."
-#     exit 1
-# fi
-# for i in $(seq 1 $num_chunks); do
-#     docker run --rm \
-#         -v $(pwd):/home/script/data \
-#         $(docker build -t icm-$i -q https://${token}:@github.com/Alcumus/onboarding-analysis-tools.git) \
-#         "$csv_file" "chunk_${i}.xlsx" "output_chunk_${i}.xlsx" &
-# done
-# wait
-# echo "✅ All containers completed!"
-
-# echo "Building Docker image..."
-# docker build -t onboarding-analysis-tools .
-
-# echo "Running parallel analysis for $num_chunks chunks..."
-# for i in $(seq 1 $num_chunks); do
-#     docker run --rm \
-#         -v $(pwd)/data:/home/script/data \
-#         onboarding-analysis-tools "$csv_file" "chunk_${i}.xlsx" "output_chunk_${i}.xlsx" &
-# done
-# wait
-# echo "✅ All containers completed!"
-
 # Step 3: Merge results
 echo "Merging chunk outputs into output_remote_master.xlsx..."
 python3 << 'PYEOF'
