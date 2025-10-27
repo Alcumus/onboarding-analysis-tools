@@ -818,8 +818,6 @@ if __name__ == '__main__':
                 column += 1
                 out_ws_onboarding_hs.cell(index + 2, column, value)
 
-    
-    
     # formatting the excel...
     style = TableStyleInfo(name="TableStyleMedium2", showFirstColumn=False,
                            showLastColumn=False, showRowStripes=True, showColumnStripes=False)
