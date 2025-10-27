@@ -56,11 +56,36 @@ Remove-Item num_chunks.txt
 # Step 2: Run parallel analysis
 if ($mode -eq "remote") {
     Write-Host "[INFO] Running in REMOTE mode (GitHub Docker build)"
+    if (-not $env:token) {
+        Write-Host "Error: GITHUB_TOKEN environment variable is not set."
+        exit 1
+    }
+    $jobs = @()
+    for ($i = 1; $i -le $num_chunks; $i++) {
+        $jobs += Start-Job -ScriptBlock {
+            param($i, $csv_file)
+            docker run --rm `
+                -v "$PWD:/home/script/data" `
+                $(docker build -t icm-$i -q https://${env:token}:@github.com/Alcumus/onboarding-analysis-tools.git) `
+                $csv_file "chunk_${i}.xlsx" "output_chunk_${i}.xlsx"
+        } -ArgumentList $i, $csv_file
+    }
+    $jobs | Wait-Job | Out-Null
 } else {
     Write-Host "[INFO] Running in LOCAL mode (local Docker image)"
+    Write-Host "Building Docker image..."
+    docker build -t onboarding-analysis-tools .
+    $jobs = @()
+    for ($i = 1; $i -le $num_chunks; $i++) {
+        $jobs += Start-Job -ScriptBlock {
+            param($i, $csv_file)
+            docker run --rm `
+                -v "$PWD:/home/script/data" `
+                onboarding-analysis-tools $csv_file "chunk_${i}.xlsx" "output_chunk_${i}.xlsx"
+        } -ArgumentList $i, $csv_file
+    }
+    $jobs | Wait-Job | Out-Null
 }
-Write-Host "Running parallel analysis for $num_chunks chunks..."
-# Logic for remote and local modes is now separated and correct.
 Write-Host "✅ All containers completed!"
 
 # Step 3: Merge results

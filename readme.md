@@ -108,8 +108,6 @@ Example:
 ```
 
 Both scripts will:
-
-Both scripts will:
 - Split the input Excel file into chunks of the specified size
 - Run parallel Docker containers for each chunk (using either remote or local Docker mode)
 - Merge the output chunk files into a single Excel file
