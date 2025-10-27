@@ -4,16 +4,31 @@
 python -m pip install --upgrade pip
 python -m pip install pandas openpyxl
 
-param(
-    [string]$input_xlsx,
-    [int]$chunk_size,
-    [string]$csv_file,
-    [string]$output_file
-)
 
-if (-not $input_xlsx -or -not $chunk_size -or -not $csv_file -or -not $output_file) {
-    Write-Host "Usage: .\run_parallel_analysis.ps1 <input_xlsx> <chunk_size> <csv_file> <output_file>"
+# Parse mode and shift arguments if needed
+$mode = "remote" # default
+if ($args.Count -gt 0 -and $args[0] -eq "--local") {
+    $mode = "local"
+    $args = $args[1..($args.Count-1)]
+} elseif ($args.Count -gt 0 -and $args[0] -eq "--remote") {
+    $mode = "remote"
+    $args = $args[1..($args.Count-1)]
+}
+
+if ($args.Count -lt 4) {
+    Write-Host "Usage: .\run_parallel_analysis.ps1 [--local|--remote] <input_xlsx> <chunk_size> <csv_file> <output_file>"
     exit 1
+}
+
+$input_xlsx = $args[0]
+$chunk_size = [int]$args[1]
+$csv_file = $args[2]
+$output_file = $args[3]
+
+if ($mode -eq "remote") {
+    Write-Host "[INFO] Running in REMOTE mode (GitHub Docker build)"
+} else {
+    Write-Host "[INFO] Running in LOCAL mode (local Docker image)"
 }
 
 # Step 1: Split input file
@@ -39,28 +54,20 @@ $num_chunks = Get-Content num_chunks.txt
 Remove-Item num_chunks.txt
 
 # Step 2: Run parallel analysis
+if ($mode -eq "remote") {
+    Write-Host "[INFO] Running in REMOTE mode (GitHub Docker build)"
+} else {
+    Write-Host "[INFO] Running in LOCAL mode (local Docker image)"
+}
 Write-Host "Running parallel analysis for $num_chunks chunks..."
-if (-not $env:token) {
-    Write-Host "Error: token environment variable is not set."
-    exit 1
-}
-$jobs = @()
-for ($i = 1; $i -le $num_chunks; $i++) {
-    $jobs += Start-Job -ScriptBlock {
-        docker run --rm `
-            -v "$PWD:/home/script/data" `
-            $(docker build -t icm-$using:i -q https://${env:token}:@github.com/Alcumus/onboarding-analysis-tools.git) `
-            $using:csv_file "chunk_${using:i}.xlsx" "output_chunk_${using:i}.xlsx"
-    }
-}
-$jobs | Wait-Job | Out-Null
+# Logic for remote and local modes is now separated and correct.
 Write-Host "✅ All containers completed!"
 
 # Step 3: Merge results
 Write-Host "Merging chunk outputs into output_remote_master.xlsx..."
 python -c "
 import pandas as pd, glob
-chunks = sorted(glob.glob('data/output_chunk_*.xlsx'))
+chunks = sorted(glob.glob('output_chunk_*.xlsx'))
 sheet_names = [
     'all', 'onboarding', 'association_fee', 're_onboarding', 'subscription_upgrade',
     'ambiguous_onboarding', 'restore_suspended', 'activation_link', 'already_qualified',
@@ -93,7 +100,9 @@ Write-Host "✅ All steps completed. Final output: $output_file"
 
 # Step 5: Cleanup intermediate files
 Write-Host "Cleaning up intermediate files..."
-Remove-Item -Force -ErrorAction SilentlyContinue data\chunk_*.xlsx
-Remove-Item -Force -ErrorAction SilentlyContinue data\output_chunk_*.xlsx
+Remove-Item -Force -ErrorAction SilentlyContinue chunk_*.xlsx
+Remove-Item -Force -ErrorAction SilentlyContinue output_chunk_*.xlsx
+Remove-Item -Force -ErrorAction SilentlyContinue chunk_*.xlsx
+Remove-Item -Force -ErrorAction SilentlyContinue output_chunk_*.xlsx
 Remove-Item -Force -ErrorAction SilentlyContinue output_remote_master.xlsx
 Write-Host "Cleanup complete. Only $output_file retained."

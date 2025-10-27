@@ -11,8 +11,17 @@ chunk_size="$2"
 csv_file="$3"
 output_file="$4"
 
+mode="remote" # default
+if [[ "$1" == "--local" ]]; then
+  mode="local"
+  shift
+elif [[ "$1" == "--remote" ]]; then
+  mode="remote"
+  shift
+fi
+
 if [[ -z "$input_xlsx" || -z "$chunk_size" || -z "$csv_file" || -z "$output_file" ]]; then
-  echo "Usage: $0 <input_xlsx> <chunk_size> <csv_file> <output_file>"
+  echo "Usage: $0 [--local|--remote] <input_xlsx> <chunk_size> <csv_file> <output_file>"
   exit 1
 fi
 
@@ -28,7 +37,7 @@ for i in range(num_chunks):
     start_idx = i * chunk_size
     end_idx = min(start_idx + chunk_size, len(df))
     chunk_df = df.iloc[start_idx:end_idx]
-    chunk_df.to_excel(f'data/chunk_{i+1}.xlsx', index=False)
+    chunk_df.to_excel(f'chunk_{i+1}.xlsx', index=False)
     print(f'Created chunk_{i+1}.xlsx with {len(chunk_df)} records')
 print(f'✅ Created {num_chunks} chunks')
 with open('num_chunks.txt', 'w') as f:
@@ -39,7 +48,34 @@ num_chunks=$(cat num_chunks.txt)
 rm num_chunks.txt
 
 # Step 2: Run parallel analysis
-echo "Running parallel analysis for $num_chunks chunks..."
+if [[ "$mode" == "remote" ]]; then
+    echo "[INFO] Running in REMOTE mode (GitHub Docker build)"
+    echo "Running parallel analysis for $num_chunks chunks..."
+  if [[ -z "$token" ]]; then
+      echo "Error: GITHUB_TOKEN environment variable is not set."
+      exit 1
+  fi
+  for i in $(seq 1 $num_chunks); do
+      docker run --rm \
+          -v $(pwd):/home/script/data \
+          $(docker build -t icm-$i -q https://${token}:@github.com/Alcumus/onboarding-analysis-tools.git) \
+          "$csv_file" "chunk_${i}.xlsx" "output_chunk_${i}.xlsx" &
+  done
+else
+    echo "[INFO] Running in LOCAL mode (local Docker image)"
+    echo "Building Docker image..."
+    docker build -t onboarding-analysis-tools .
+    echo "Running parallel analysis for $num_chunks chunks..."
+    for i in $(seq 1 $num_chunks); do
+            docker run --rm \
+                    -v $(pwd)/data:/home/script/data \
+                    onboarding-analysis-tools "$csv_file" "chunk_${i}.xlsx" "output_chunk_${i}.xlsx" &
+    done
+fi
+wait
+echo "✅ All containers completed!"
+
+# echo "Running parallel analysis for $num_chunks chunks..."
 # if [[ -z "$token" ]]; then
 #     echo "Error: GITHUB_TOKEN environment variable is not set."
 #     exit 1
@@ -53,23 +89,23 @@ echo "Running parallel analysis for $num_chunks chunks..."
 # wait
 # echo "✅ All containers completed!"
 
-echo "Building Docker image..."
-docker build -t onboarding-analysis-tools .
+# echo "Building Docker image..."
+# docker build -t onboarding-analysis-tools .
 
-echo "Running parallel analysis for $num_chunks chunks..."
-for i in $(seq 1 $num_chunks); do
-    docker run --rm \
-        -v $(pwd)/data:/home/script/data \
-        onboarding-analysis-tools "$csv_file" "chunk_${i}.xlsx" "output_chunk_${i}.xlsx" &
-done
-wait
-echo "✅ All containers completed!"
+# echo "Running parallel analysis for $num_chunks chunks..."
+# for i in $(seq 1 $num_chunks); do
+#     docker run --rm \
+#         -v $(pwd)/data:/home/script/data \
+#         onboarding-analysis-tools "$csv_file" "chunk_${i}.xlsx" "output_chunk_${i}.xlsx" &
+# done
+# wait
+# echo "✅ All containers completed!"
 
 # Step 3: Merge results
 echo "Merging chunk outputs into output_remote_master.xlsx..."
 python3 << 'PYEOF'
 import pandas as pd, glob
-chunks = sorted(glob.glob('data/output_chunk_*.xlsx'))
+chunks = sorted(glob.glob('output_chunk_*.xlsx'))
 sheet_names = [
     'all', 'onboarding', 'association_fee', 're_onboarding', 'subscription_upgrade',
     'ambiguous_onboarding', 'restore_suspended', 'activation_link', 'already_qualified',
