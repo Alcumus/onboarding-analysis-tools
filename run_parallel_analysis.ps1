@@ -60,7 +60,7 @@ Write-Host "✅ All containers completed!"
 Write-Host "Merging chunk outputs into output_remote_master.xlsx..."
 python -c "
 import pandas as pd, glob
-chunks = sorted(glob.glob('output_chunk_*.xlsx'))
+chunks = sorted(glob.glob('data/output_chunk_*.xlsx'))
 sheet_names = [
     'all', 'onboarding', 'association_fee', 're_onboarding', 'subscription_upgrade',
     'ambiguous_onboarding', 'restore_suspended', 'activation_link', 'already_qualified',
@@ -90,3 +90,10 @@ with pd.ExcelWriter('output_remote_master.xlsx') as writer:
 Write-Host "Formatting merged output..."
 python format_excel.py output_remote_master.xlsx $output_file
 Write-Host "✅ All steps completed. Final output: $output_file"
+
+# Step 5: Cleanup intermediate files
+Write-Host "Cleaning up intermediate files..."
+Remove-Item -Force -ErrorAction SilentlyContinue data\chunk_*.xlsx
+Remove-Item -Force -ErrorAction SilentlyContinue data\output_chunk_*.xlsx
+Remove-Item -Force -ErrorAction SilentlyContinue output_remote_master.xlsx
+Write-Host "Cleanup complete. Only $output_file retained."

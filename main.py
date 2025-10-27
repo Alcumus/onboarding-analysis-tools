@@ -208,11 +208,14 @@ def smart_boolean(bool_data):
 def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, contact_match=None):
     cbx_company = cbx_row[CBX_COMPANY_FR] if cbx_row[CBX_COMPANY_FR] else cbx_row[CBX_COMPANY_EN]
     print('   --> ', cbx_company, hc_email, cbx_row[CBX_ID], ratio_company, ratio_address, contact_match)
-    hiring_clients_list = cbx_row[CBX_HIRING_CLIENT_NAMES].split(args.list_separator)
+    def norm_name(name):
+        return str(name).strip().lower() if name else ''
+
+    hiring_clients_list = [norm_name(x) for x in cbx_row[CBX_HIRING_CLIENT_NAMES].split(args.list_separator)]
     hiring_clients_qstatus = cbx_row[CBX_HIRING_CLIENT_QSTATUS].split(args.list_separator)
+    hc_name_norm = norm_name(hc_row[HC_HIRING_CLIENT_NAME])
     hc_count = len(hiring_clients_list) if cbx_row[CBX_HIRING_CLIENT_NAMES] else 0
-    is_in_relationship = True if (
-            hc_row[HC_HIRING_CLIENT_NAME] in hiring_clients_list and hc_row[HC_HIRING_CLIENT_NAME]) else False
+    is_in_relationship = hc_name_norm in hiring_clients_list and hc_name_norm != ''
     is_qualified = False
     sub_price_usd = float(cbx_row[CBX_SUB_PRICE_USD]) if cbx_row[CBX_SUB_PRICE_USD] else 0.0
     employee_price_usd = float(cbx_row[CBX_EMPL_PRICE_USD]) if cbx_row[CBX_EMPL_PRICE_USD] else 0.0
@@ -223,7 +226,7 @@ def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, c
     if hc_row[HC_CONTACT_CURRENCY] != '' and hc_row[HC_CONTACT_CURRENCY] not in SUPPORTED_CURRENCIES:
         raise AssertionError(f'Invalid currency: {hc_row[HC_CONTACT_CURRENCY]}, must be in {SUPPORTED_CURRENCIES}')
     for idx, val in enumerate(hiring_clients_list):
-        if val == hc_row[HC_HIRING_CLIENT_NAME] and hiring_clients_qstatus[idx] == 'validated':
+        if val == hc_name_norm and idx < len(hiring_clients_qstatus) and hiring_clients_qstatus[idx].strip().lower() == 'validated':
             is_qualified = True
             break
     try:
@@ -301,6 +304,7 @@ def action(hc_data, cbx_data, create, subscription_update, expiration_date, is_q
                     if subscription_update:
                         return 'subscription_upgrade'
                     elif hc_data[HC_IS_ASSOCIATION_FEE] and not cbx_data['is_in_relationship']:
+                        # Association fee only if renewal > 60 days, else add questionnaire
                         if expiration_date:
                             in_60_days = datetime.now() + timedelta(days=60)
                             if expiration_date > in_60_days:
@@ -627,8 +631,25 @@ if __name__ == '__main__':
                             add_analysis_data(hc_row, cbx_row, ratio_company, ratio_address, contact_match))
         ids = []
         best_match = 0
-        matches = sorted(matches, key=lambda x: (x["ratio_address"], x["ratio_company"], x['hiring_client_count']),
-                         reverse=True)
+        # Exclude 'DO NOT USE' entries
+        matches = [m for m in matches if 'DO NOT USE' not in m['company'].upper()]
+
+        # Prioritize matches where the hiring client NAME is present in Cognibox hiring_client_names
+        hc_name = str(hc_row[HC_HIRING_CLIENT_NAME]).strip().lower()
+        def has_hc_name(m):
+            names = str(m.get('hiring_client_names', '')).lower().split(';')
+            return any(hc_name == n.strip() for n in names)
+        hc_matches = [m for m in matches if has_hc_name(m)]
+        if hc_matches:
+            matches = hc_matches
+
+        # Prefer 'Active' registration_status
+        active_matches = [m for m in matches if m.get('registration_status', '').strip() == 'Active']
+        if active_matches:
+            matches = active_matches
+
+        # Sort by modules and hiring_client_count, then address/company ratios
+        matches = sorted(matches, key=lambda x: (x.get('modules', 0), x.get('hiring_client_count', 0), x["ratio_address"], x["ratio_company"]), reverse=True)
         for item in matches[0:10]:
             ids.append(f'{item["cbx_id"]}, {item["company"]}, {item["address"]}, {item["city"]}, {item["state"]} '
                        f'{item["country"]} {item["zip"]}, {item["email"]}, {item["first_name"]} {item["last_name"]}'
@@ -797,6 +818,8 @@ if __name__ == '__main__':
                 column += 1
                 out_ws_onboarding_hs.cell(index + 2, column, value)
 
+    
+    
     # formatting the excel...
     style = TableStyleInfo(name="TableStyleMedium2", showFirstColumn=False,
                            showLastColumn=False, showRowStripes=True, showColumnStripes=False)
