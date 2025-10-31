@@ -208,8 +208,12 @@ def smart_boolean(bool_data):
 def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, contact_match=None):
     cbx_company = cbx_row[CBX_COMPANY_FR] if cbx_row[CBX_COMPANY_FR] else cbx_row[CBX_COMPANY_EN]
     print('   --> ', cbx_company, hc_email, cbx_row[CBX_ID], ratio_company, ratio_address, contact_match)
+    import string
     def norm_name(name):
-        return str(name).strip().lower() if name else ''
+        if not name:
+            return ''
+        # Remove punctuation, lowercase, and strip whitespace
+        return str(name).translate(str.maketrans('', '', string.punctuation)).strip().lower()
 
     hiring_clients_list = [norm_name(x) for x in cbx_row[CBX_HIRING_CLIENT_NAMES].split(args.list_separator)]
     hiring_clients_qstatus = cbx_row[CBX_HIRING_CLIENT_QSTATUS].split(args.list_separator)
@@ -217,6 +221,7 @@ def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, c
     hc_count = len(hiring_clients_list) if cbx_row[CBX_HIRING_CLIENT_NAMES] else 0
     is_in_relationship = hc_name_norm in hiring_clients_list and hc_name_norm != ''
     is_qualified = False
+    matched_qstatus = None
     sub_price_usd = float(cbx_row[CBX_SUB_PRICE_USD]) if cbx_row[CBX_SUB_PRICE_USD] else 0.0
     employee_price_usd = float(cbx_row[CBX_EMPL_PRICE_USD]) if cbx_row[CBX_EMPL_PRICE_USD] else 0.0
     sub_price_cad = float(cbx_row[CBX_SUB_PRICE_CAD]) if cbx_row[CBX_SUB_PRICE_CAD] else 0.0
@@ -226,8 +231,11 @@ def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, c
     if hc_row[HC_CONTACT_CURRENCY] != '' and hc_row[HC_CONTACT_CURRENCY] not in SUPPORTED_CURRENCIES:
         raise AssertionError(f'Invalid currency: {hc_row[HC_CONTACT_CURRENCY]}, must be in {SUPPORTED_CURRENCIES}')
     for idx, val in enumerate(hiring_clients_list):
-        if val == hc_name_norm and idx < len(hiring_clients_qstatus) and hiring_clients_qstatus[idx].strip().lower() == 'validated':
-            is_qualified = True
+        if val == hc_name_norm and idx < len(hiring_clients_qstatus):
+            qstatus = hiring_clients_qstatus[idx].strip().lower()
+            matched_qstatus = qstatus
+            if qstatus == 'validated':
+                is_qualified = True
             break
     try:
         expiration_date = datetime.strptime(cbx_row[CBX_EXPIRATION_DATE],
@@ -237,21 +245,22 @@ def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, c
                                         "%d/%m/%Y") if cbx_row[CBX_EXPIRATION_DATE] else None
 
     return {'cbx_id': int(cbx_row[CBX_ID]), 'hc_contractor_summary': hiring_client_contractor_summary, 'analysis':'', 'company': cbx_company, 'address': cbx_row[CBX_ADDRESS],
-            'city': cbx_row[CBX_CITY], 'state': cbx_row[CBX_STATE], 'zip': cbx_row[CBX_ZIP],
-            'country': cbx_row[CBX_COUNTRY], 'expiration_date': expiration_date,
-            'registration_status': cbx_row[CBX_REGISTRATION_STATUS],
-            'suspended': cbx_row[CBX_SUSPENDED], 'email': cbx_row[CBX_EMAIL], 'first_name': cbx_row[CBX_FISTNAME],
-            'last_name': cbx_row[CBX_LASTNAME], 'modules': cbx_row[CBX_MODULES],
-            'account_type': cbx_row[CBX_ACCOUNT_TYPE],
-            'subscription_price': sub_price_cad if hc_row[HC_CONTACT_CURRENCY] == "CAD" else sub_price_usd,
-            'employee_price': employee_price_cad if hc_row[HC_CONTACT_CURRENCY] == "CAD" else employee_price_usd,
-            'parents': cbx_row[CBX_PARENTS], 'previous': cbx_row[CBX_COMPANY_OLD],
-            'hiring_client_names': cbx_row[CBX_HIRING_CLIENT_NAMES], 'hiring_client_count': hc_count,
-            'is_in_relationship': is_in_relationship, 'is_qualified': is_qualified,
-            'ratio_company': ratio_company, 'ratio_address': ratio_address, 'contact_match': contact_match, 
-            'cbx_assessment_level': cbx_row[CBX_ASSESSMENT_LEVEL],
-            'new_product': cbx_row[CBX_IS_NEW_PRODUCT]
-            }
+        'city': cbx_row[CBX_CITY], 'state': cbx_row[CBX_STATE], 'zip': cbx_row[CBX_ZIP],
+        'country': cbx_row[CBX_COUNTRY], 'expiration_date': expiration_date,
+        'registration_status': cbx_row[CBX_REGISTRATION_STATUS],
+        'suspended': cbx_row[CBX_SUSPENDED], 'email': cbx_row[CBX_EMAIL], 'first_name': cbx_row[CBX_FISTNAME],
+        'last_name': cbx_row[CBX_LASTNAME], 'modules': cbx_row[CBX_MODULES],
+        'account_type': cbx_row[CBX_ACCOUNT_TYPE],
+        'subscription_price': sub_price_cad if hc_row[HC_CONTACT_CURRENCY] == "CAD" else sub_price_usd,
+        'employee_price': employee_price_cad if hc_row[HC_CONTACT_CURRENCY] == "CAD" else employee_price_usd,
+        'parents': cbx_row[CBX_PARENTS], 'previous': cbx_row[CBX_COMPANY_OLD],
+        'hiring_client_names': cbx_row[CBX_HIRING_CLIENT_NAMES], 'hiring_client_count': hc_count,
+        'is_in_relationship': is_in_relationship, 'is_qualified': is_qualified,
+        'matched_qstatus': matched_qstatus,
+        'ratio_company': ratio_company, 'ratio_address': ratio_address, 'contact_match': contact_match, 
+        'cbx_assessment_level': cbx_row[CBX_ASSESSMENT_LEVEL],
+        'new_product': cbx_row[CBX_IS_NEW_PRODUCT]
+        }
 
 
 def core_mandatory_provided(hcd):
@@ -296,13 +305,21 @@ def action(hc_data, cbx_data, create, subscription_update, expiration_date, is_q
         else:
             if reg_status == 'Active':
                 if cbx_data['is_in_relationship']:
-                    if is_qualified:
+                    qstatus = cbx_data.get('matched_qstatus', None)
+                    if qstatus == 'validated':
                         return 'already_qualified'
-                    else:
+                    elif qstatus in ('pending', 'expired', 'conditional', 'refused'):
                         return 'follow_up_qualification'
+                    else:
+                        # If qstatus is missing or unknown, fallback to previous logic
+                        if is_qualified:
+                            return 'already_qualified'
+                        else:
+                            return 'follow_up_qualification'
                 else:
                     if subscription_update:
                         return 'subscription_upgrade'
+                    # Only offer association_fee if NOT in relationship
                     elif hc_data[HC_IS_ASSOCIATION_FEE] and not cbx_data['is_in_relationship']:
                         # Association fee only if renewal > 60 days, else add questionnaire
                         if expiration_date:
