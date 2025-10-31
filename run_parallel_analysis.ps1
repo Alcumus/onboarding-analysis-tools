@@ -50,47 +50,55 @@ with open('num_chunks.txt', 'w') as f:
     f.write(str(num_chunks))
 " $input_xlsx $chunk_size
 
-$num_chunks = Get-Content num_chunks.txt
+ $num_chunks = Get-Content num_chunks.txt
 Remove-Item num_chunks.txt
 
 # Step 2: Run parallel analysis
 if ($mode -eq "remote") {
     Write-Host "[INFO] Running in REMOTE mode (GitHub Docker build)"
+    Write-Host "Running parallel analysis for $num_chunks chunks..."
     if (-not $env:token) {
         Write-Host "Error: GITHUB_TOKEN environment variable is not set."
         exit 1
     }
     $jobs = @()
     for ($i = 1; $i -le $num_chunks; $i++) {
+        Write-Host "Starting chunk $i..."
         $jobs += Start-Job -ScriptBlock {
-            param($i, $csv_file)
+            param($i, $csv_file, $token)
             docker run --rm `
-                -v "$PWD:/home/script/data" `
-                $(docker build -t icm-$i -q https://${env:token}:@github.com/Alcumus/onboarding-analysis-tools.git) `
+                -v "$using:PWD:/home/script/data" `
+                $(docker build -t icm-$i -q "https://${token}:@github.com/Alcumus/onboarding-analysis-tools.git") `
                 $csv_file "chunk_${i}.xlsx" "output_chunk_${i}.xlsx"
-        } -ArgumentList $i, $csv_file
+        } -ArgumentList $i, $csv_file, $env:token
     }
-    $jobs | Wait-Job | Out-Null
+    Write-Host "Waiting for all jobs to complete..."
+    $jobs | Wait-Job | Receive-Job
+    $jobs | Remove-Job
 } else {
     Write-Host "[INFO] Running in LOCAL mode (local Docker image)"
     Write-Host "Building Docker image..."
     docker build -t onboarding-analysis-tools .
+    Write-Host "Running parallel analysis for $num_chunks chunks..."
     $jobs = @()
     for ($i = 1; $i -le $num_chunks; $i++) {
+        Write-Host "Starting chunk $i..."
         $jobs += Start-Job -ScriptBlock {
-            param($i, $csv_file)
+            param($i, $csv_file, $pwd)
             docker run --rm `
-                -v "$PWD:/home/script/data" `
+                -v "${pwd}/data:/home/script/data" `
                 onboarding-analysis-tools $csv_file "chunk_${i}.xlsx" "output_chunk_${i}.xlsx"
-        } -ArgumentList $i, $csv_file
+        } -ArgumentList $i, $csv_file, $PWD
     }
-    $jobs | Wait-Job | Out-Null
+    Write-Host "Waiting for all jobs to complete..."
+    $jobs | Wait-Job | Receive-Job
+    $jobs | Remove-Job
 }
 Write-Host "✅ All containers completed!"
 
 # Step 3: Merge results
 Write-Host "Merging chunk outputs into output_remote_master.xlsx..."
-python -c "
+python3 -c "
 import pandas as pd, glob
 chunks = sorted(glob.glob('output_chunk_*.xlsx'))
 sheet_names = [
@@ -120,7 +128,7 @@ with pd.ExcelWriter('output_remote_master.xlsx') as writer:
 
 # Step 4: Format output
 Write-Host "Formatting merged output..."
-python format_excel.py output_remote_master.xlsx $output_file
+python3 format_excel.py output_remote_master.xlsx $output_file
 Write-Host "✅ All steps completed. Final output: $output_file"
 
 # Step 5: Cleanup intermediate files

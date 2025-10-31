@@ -809,7 +809,7 @@ if __name__ == '__main__':
     for index, row in enumerate(existing_contractors_rd):
         column = 0
         for i, value in enumerate(row):
-            if existing_contractors_headers_mapping[i]:
+            if i < len(existing_contractors_headers_mapping) and existing_contractors_headers_mapping[i]:
                 column += 1
                 out_ws_existing_contractors.cell(index + 2, column, value)
 
@@ -818,7 +818,7 @@ if __name__ == '__main__':
     for index, row in enumerate(hc_onboarding_rd):
         column = 0
         for i, value in enumerate(row):
-            if rd_headers_mapping[i]:
+            if i < len(rd_headers_mapping) and rd_headers_mapping[i]:
                 column += 1
                 # Invert code and id columns
                 if column == rd_pricing_group_id_col:
@@ -831,7 +831,7 @@ if __name__ == '__main__':
     for index, row in enumerate(hc_data):
         column = 0
         for i, value in enumerate(row):
-            if hs_headers_mapping[i]:
+            if i < len(hs_headers_mapping) and hs_headers_mapping[i]:
                 column += 1
                 out_ws_onboarding_hs.cell(index + 2, column, value)
 
