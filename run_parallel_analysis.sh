@@ -11,17 +11,17 @@ chunk_size="$2"
 csv_file="$3"
 output_file="$4"
 
-mode="local" # default
-if [[ "$1" == "--local" ]]; then
+mode="remote" # default
+if [[ "$5" == "--local" ]]; then
   mode="local"
   shift
-elif [[ "$1" == "--remote" ]]; then
+elif [[ "$5" == "--remote" ]]; then
   mode="remote"
   shift
 fi
 
 if [[ -z "$input_xlsx" || -z "$chunk_size" || -z "$csv_file" || -z "$output_file" ]]; then
-  echo "Usage: $0 [--local|--remote] <input_xlsx> <chunk_size> <csv_file> <output_file>"
+  echo "Usage: $0 <input_xlsx> <chunk_size> <csv_file> <output_file> [--local|--remote] "
   exit 1
 fi
 
