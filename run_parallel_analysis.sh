@@ -113,7 +113,7 @@ if [[ "$mode" == "remote" ]]; then
 else
     echo "[INFO] Running in LOCAL mode (local Docker image)"
     echo "Building Docker image..."
-    docker build -t onboarding-analysis-tools .
+    docker build --no-cache -t onboarding-analysis-tools .
     echo "Running parallel analysis for $num_chunks chunks..."
     for i in $(seq 1 $num_chunks); do
             docker run --rm \
