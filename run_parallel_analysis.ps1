@@ -1,22 +1,11 @@
-# Usage: .\run_parallel_analysis.ps1 <input_xlsx> <chunk_size> <csv_file> <output_file>
+# Usage: .\run_parallel_analysis.ps1 <input_xlsx> <chunk_size> <csv_file> <output_file> [--local|--remote]
 # Ensure Python 3 is installed (user must do this manually)
 # Install required Python packages
 python -m pip install --upgrade pip
 python -m pip install pandas openpyxl
 
-
-# Parse mode and shift arguments if needed
-$mode = "remote" # default
-if ($args.Count -gt 0 -and $args[0] -eq "--local") {
-    $mode = "local"
-    $args = $args[1..($args.Count-1)]
-} elseif ($args.Count -gt 0 -and $args[0] -eq "--remote") {
-    $mode = "remote"
-    $args = $args[1..($args.Count-1)]
-}
-
 if ($args.Count -lt 4) {
-    Write-Host "Usage: .\run_parallel_analysis.ps1 [--local|--remote] <input_xlsx> <chunk_size> <csv_file> <output_file>"
+    Write-Host "Usage: .\run_parallel_analysis.ps1 <input_xlsx> <chunk_size> <csv_file> <output_file> [--local|--remote]"
     exit 1
 }
 
@@ -24,6 +13,16 @@ $input_xlsx = $args[0]
 $chunk_size = [int]$args[1]
 $csv_file = $args[2]
 $output_file = $args[3]
+
+# Parse mode from last optional parameter
+$mode = "remote" # default
+if ($args.Count -gt 4) {
+    if ($args[4] -eq "--local") {
+        $mode = "local"
+    } elseif ($args[4] -eq "--remote") {
+        $mode = "remote"
+    }
+}
 
 if ($mode -eq "remote") {
     Write-Host "[INFO] Running in REMOTE mode (GitHub Docker build)"
