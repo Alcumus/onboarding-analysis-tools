@@ -319,7 +319,6 @@ def action(hc_data, cbx_data, create, subscription_update, expiration_date, is_q
                 else:
                     if subscription_update:
                         return 'subscription_upgrade'
-                    # Only offer association_fee if NOT in relationship
                     elif hc_data[HC_IS_ASSOCIATION_FEE] and not cbx_data['is_in_relationship']:
                         # Association fee only if renewal > 60 days, else add questionnaire
                         if expiration_date:
@@ -680,7 +679,9 @@ if __name__ == '__main__':
         prorated_upgrade_price = 0.00
         if uniques_cbx_id:
             for key, value in matches[0].items():
-                match_data.append(value)
+                # Skip matched_qstatus - it's only used for internal logic, not output
+                if key != 'matched_qstatus':
+                    match_data.append(value)
             hc_row.extend(match_data)
             hc_row.append(True if hc_domain in GENERIC_DOMAIN else False)
             hc_row.append(len(uniques_cbx_id) if len(uniques_cbx_id) else '')
@@ -809,7 +810,7 @@ if __name__ == '__main__':
     for index, row in enumerate(existing_contractors_rd):
         column = 0
         for i, value in enumerate(row):
-            if existing_contractors_headers_mapping[i]:
+            if i < len(existing_contractors_headers_mapping) and existing_contractors_headers_mapping[i]:
                 column += 1
                 out_ws_existing_contractors.cell(index + 2, column, value)
 
@@ -818,7 +819,7 @@ if __name__ == '__main__':
     for index, row in enumerate(hc_onboarding_rd):
         column = 0
         for i, value in enumerate(row):
-            if rd_headers_mapping[i]:
+            if i < len(rd_headers_mapping) and rd_headers_mapping[i]:
                 column += 1
                 # Invert code and id columns
                 if column == rd_pricing_group_id_col:
@@ -831,7 +832,7 @@ if __name__ == '__main__':
     for index, row in enumerate(hc_data):
         column = 0
         for i, value in enumerate(row):
-            if hs_headers_mapping[i]:
+            if i < len(hs_headers_mapping) and hs_headers_mapping[i]:
                 column += 1
                 out_ws_onboarding_hs.cell(index + 2, column, value)
 

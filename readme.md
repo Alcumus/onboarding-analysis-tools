@@ -61,12 +61,12 @@ __** Please note that the script doesn't actually support "paths" to the input/o
 ## Parallel Analysis Scripts
 
 
-For large datasets, you can use the provided scripts to automate splitting, parallel processing, merging, and formatting. These scripts now support both remote (GitHub Docker) and local (pre-built Docker image) execution modes. Set the mode using the optional `--local` or `--remote` flag as the first argument. If omitted, remote mode is used by default. Your GitHub token must be set as an environment variable:
+For large datasets, you can use the provided scripts to automate splitting, parallel processing, merging, and formatting. These scripts now support both remote (GitHub Docker) and local (pre-built Docker image) execution modes. Set the mode using the optional `--local` or `--remote` flag as the **last parameter**. If omitted, remote mode is used by default. Your GitHub token must be set as an environment variable for remote mode:
 
 
 ### Shell Script (WSL/macOS/Linux)
 
-Set your token:
+Set your token (for remote mode):
 ```bash
 export token='<your personal github token>'
 ```
@@ -79,17 +79,17 @@ chmod +x run_parallel_analysis.sh
 Run the script (local mode):
 ```bash
 chmod +x run_parallel_analysis.sh
-./run_parallel_analysis.sh --local <input_xlsx> <chunk_size> <csv_file> <output_file>
+./run_parallel_analysis.sh <input_xlsx> <chunk_size> <csv_file> <output_file> --local
 ```
 Example:
 ```bash
 chmod +x run_parallel_analysis.sh
-./run_parallel_analysis.sh --local OCWAwave2.xlsx 50 OCT16.csv output_remote_master_formatted.xlsx
+./run_parallel_analysis.sh OCWAwave2.xlsx 50 OCT16.csv output_remote_master_formatted.xlsx --local
 ```
 
 ### PowerShell Script (Windows)
 
-Set your token:
+Set your token (for remote mode):
 ```powershell
 $env:token = '<your personal github token to access the repository>'
 ```
@@ -100,11 +100,11 @@ Run the script (remote mode, default):
 ```
 Run the script (local mode):
 ```powershell
-./run_parallel_analysis.ps1 --local <input_xlsx> <chunk_size> <csv_file> <output_file>
+./run_parallel_analysis.ps1 <input_xlsx> <chunk_size> <csv_file> <output_file> --local
 ```
 Example:
 ```powershell
-./run_parallel_analysis.ps1 --local OCWAwave2.xlsx 50 OCT16.csv output_remote_master_formatted.xlsx
+./run_parallel_analysis.ps1 OCWAwave2.xlsx 50 OCT16.csv output_remote_master_formatted.xlsx --local
 ```
 
 Both scripts will:

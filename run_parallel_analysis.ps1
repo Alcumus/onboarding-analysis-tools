@@ -1,22 +1,11 @@
-# Usage: .\run_parallel_analysis.ps1 <input_xlsx> <chunk_size> <csv_file> <output_file>
+# Usage: .\run_parallel_analysis.ps1 <input_xlsx> <chunk_size> <csv_file> <output_file> [--local|--remote]
 # Ensure Python 3 is installed (user must do this manually)
 # Install required Python packages
 python -m pip install --upgrade pip
 python -m pip install pandas openpyxl
 
-
-# Parse mode and shift arguments if needed
-$mode = "remote" # default
-if ($args.Count -gt 0 -and $args[0] -eq "--local") {
-    $mode = "local"
-    $args = $args[1..($args.Count-1)]
-} elseif ($args.Count -gt 0 -and $args[0] -eq "--remote") {
-    $mode = "remote"
-    $args = $args[1..($args.Count-1)]
-}
-
 if ($args.Count -lt 4) {
-    Write-Host "Usage: .\run_parallel_analysis.ps1 [--local|--remote] <input_xlsx> <chunk_size> <csv_file> <output_file>"
+    Write-Host "Usage: .\run_parallel_analysis.ps1 <input_xlsx> <chunk_size> <csv_file> <output_file> [--local|--remote]"
     exit 1
 }
 
@@ -24,6 +13,16 @@ $input_xlsx = $args[0]
 $chunk_size = [int]$args[1]
 $csv_file = $args[2]
 $output_file = $args[3]
+
+# Parse mode from last optional parameter
+$mode = "remote" # default
+if ($args.Count -gt 4) {
+    if ($args[4] -eq "--local") {
+        $mode = "local"
+    } elseif ($args[4] -eq "--remote") {
+        $mode = "remote"
+    }
+}
 
 if ($mode -eq "remote") {
     Write-Host "[INFO] Running in REMOTE mode (GitHub Docker build)"
@@ -50,47 +49,55 @@ with open('num_chunks.txt', 'w') as f:
     f.write(str(num_chunks))
 " $input_xlsx $chunk_size
 
-$num_chunks = Get-Content num_chunks.txt
+ $num_chunks = Get-Content num_chunks.txt
 Remove-Item num_chunks.txt
 
 # Step 2: Run parallel analysis
 if ($mode -eq "remote") {
     Write-Host "[INFO] Running in REMOTE mode (GitHub Docker build)"
+    Write-Host "Running parallel analysis for $num_chunks chunks..."
     if (-not $env:token) {
         Write-Host "Error: GITHUB_TOKEN environment variable is not set."
         exit 1
     }
     $jobs = @()
     for ($i = 1; $i -le $num_chunks; $i++) {
+        Write-Host "Starting chunk $i..."
         $jobs += Start-Job -ScriptBlock {
-            param($i, $csv_file)
+            param($i, $csv_file, $token)
             docker run --rm `
-                -v "$PWD:/home/script/data" `
-                $(docker build -t icm-$i -q https://${env:token}:@github.com/Alcumus/onboarding-analysis-tools.git) `
+                -v "$using:PWD:/home/script/data" `
+                $(docker build -t icm-$i -q "https://${token}:@github.com/Alcumus/onboarding-analysis-tools.git") `
                 $csv_file "chunk_${i}.xlsx" "output_chunk_${i}.xlsx"
-        } -ArgumentList $i, $csv_file
+        } -ArgumentList $i, $csv_file, $env:token
     }
-    $jobs | Wait-Job | Out-Null
+    Write-Host "Waiting for all jobs to complete..."
+    $jobs | Wait-Job | Receive-Job
+    $jobs | Remove-Job
 } else {
     Write-Host "[INFO] Running in LOCAL mode (local Docker image)"
     Write-Host "Building Docker image..."
     docker build -t onboarding-analysis-tools .
+    Write-Host "Running parallel analysis for $num_chunks chunks..."
     $jobs = @()
     for ($i = 1; $i -le $num_chunks; $i++) {
+        Write-Host "Starting chunk $i..."
         $jobs += Start-Job -ScriptBlock {
-            param($i, $csv_file)
+            param($i, $csv_file, $pwd)
             docker run --rm `
-                -v "$PWD:/home/script/data" `
+                -v "${pwd}/data:/home/script/data" `
                 onboarding-analysis-tools $csv_file "chunk_${i}.xlsx" "output_chunk_${i}.xlsx"
-        } -ArgumentList $i, $csv_file
+        } -ArgumentList $i, $csv_file, $PWD
     }
-    $jobs | Wait-Job | Out-Null
+    Write-Host "Waiting for all jobs to complete..."
+    $jobs | Wait-Job | Receive-Job
+    $jobs | Remove-Job
 }
 Write-Host "✅ All containers completed!"
 
 # Step 3: Merge results
 Write-Host "Merging chunk outputs into output_remote_master.xlsx..."
-python -c "
+python3 -c "
 import pandas as pd, glob
 chunks = sorted(glob.glob('output_chunk_*.xlsx'))
 sheet_names = [
@@ -120,7 +127,7 @@ with pd.ExcelWriter('output_remote_master.xlsx') as writer:
 
 # Step 4: Format output
 Write-Host "Formatting merged output..."
-python format_excel.py output_remote_master.xlsx $output_file
+python3 format_excel.py output_remote_master.xlsx $output_file
 Write-Host "✅ All steps completed. Final output: $output_file"
 
 # Step 5: Cleanup intermediate files
