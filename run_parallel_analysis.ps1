@@ -1,8 +1,8 @@
 # Usage: .\run_parallel_analysis.ps1 <input_xlsx> <chunk_size> <csv_file> <output_file> [--local|--remote]
 # Ensure Python 3 is installed (user must do this manually)
 # Install required Python packages
-python -m pip install --upgrade pip
-python -m pip install pandas openpyxl
+py -3.12 -m pip install --upgrade pip
+py -3.12 -m pip install pandas openpyxl
 
 if ($args.Count -lt 4) {
     Write-Host "Usage: .\run_parallel_analysis.ps1 <input_xlsx> <chunk_size> <csv_file> <output_file> [--local|--remote]"
@@ -32,7 +32,7 @@ if ($mode -eq "remote") {
 
 # Step 1: Split input file
 Write-Host "Splitting $input_xlsx into chunks of $chunk_size rows..."
-python -c "
+py -3.12 -c "
 import pandas as pd, sys
 input_file = sys.argv[1]
 chunk_size = int(sys.argv[2])
@@ -60,16 +60,17 @@ if ($mode -eq "remote") {
         Write-Host "Error: GITHUB_TOKEN environment variable is not set."
         exit 1
     }
+    $current_path = $PWD.Path
     $jobs = @()
     for ($i = 1; $i -le $num_chunks; $i++) {
         Write-Host "Starting chunk $i..."
         $jobs += Start-Job -ScriptBlock {
-            param($i, $csv_file, $token)
+            param($i, $csv_file, $token, $pwd)
             docker run --rm `
-                -v "$using:PWD:/home/script/data" `
+                -v "${pwd}:/home/script/data" `
                 $(docker build -t icm-$i -q "https://${token}:@github.com/Alcumus/onboarding-analysis-tools.git") `
                 $csv_file "chunk_${i}.xlsx" "output_chunk_${i}.xlsx"
-        } -ArgumentList $i, $csv_file, $env:token
+        } -ArgumentList $i, $csv_file, $env:token, $current_path
     }
     Write-Host "Waiting for all jobs to complete..."
     $jobs | Wait-Job | Receive-Job
@@ -79,15 +80,16 @@ if ($mode -eq "remote") {
     Write-Host "Building Docker image..."
     docker build -t onboarding-analysis-tools .
     Write-Host "Running parallel analysis for $num_chunks chunks..."
+    $current_path = $PWD.Path
     $jobs = @()
     for ($i = 1; $i -le $num_chunks; $i++) {
         Write-Host "Starting chunk $i..."
         $jobs += Start-Job -ScriptBlock {
             param($i, $csv_file, $pwd)
             docker run --rm `
-                -v "${pwd}/data:/home/script/data" `
+                -v "${pwd}:/home/script/data" `
                 onboarding-analysis-tools $csv_file "chunk_${i}.xlsx" "output_chunk_${i}.xlsx"
-        } -ArgumentList $i, $csv_file, $PWD
+        } -ArgumentList $i, $csv_file, $current_path
     }
     Write-Host "Waiting for all jobs to complete..."
     $jobs | Wait-Job | Receive-Job
@@ -97,7 +99,7 @@ Write-Host "✅ All containers completed!"
 
 # Step 3: Merge results
 Write-Host "Merging chunk outputs into output_remote_master.xlsx..."
-python3 -c "
+py -3.12 -c "
 import pandas as pd, glob
 chunks = sorted(glob.glob('output_chunk_*.xlsx'))
 sheet_names = [
@@ -127,7 +129,7 @@ with pd.ExcelWriter('output_remote_master.xlsx') as writer:
 
 # Step 4: Format output
 Write-Host "Formatting merged output..."
-python3 format_excel.py output_remote_master.xlsx $output_file
+py -3.12 format_excel.py output_remote_master.xlsx $output_file
 Write-Host "✅ All steps completed. Final output: $output_file"
 
 # Step 5: Cleanup intermediate files
