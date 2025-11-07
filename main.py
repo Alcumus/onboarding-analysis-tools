@@ -35,7 +35,7 @@ assessment_levels = {
     "gold": 2,
     "silver": 2,
     "bronze" : 1,
-    "level3": 2, 
+    "level3": 2,
     "level2": 2,
     "level1": 1,
     "3":2,
