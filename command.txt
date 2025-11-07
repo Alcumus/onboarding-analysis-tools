@@ -1,0 +1,1 @@
+docker run --rm -it -v ${pwd}:/home/script/data $(docker build -t icm -q https://${env:token}:@github.com/Alcumus/onboarding-analysis-tools.git) cbx_contractor_db_dump.csv hc_list.xlsx results.xlsx
