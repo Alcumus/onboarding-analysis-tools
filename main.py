@@ -828,7 +828,6 @@ if __name__ == '__main__':
                     out_ws_onboarding_rd.cell(index + 2, column - 1, value)
                 else:
                     out_ws_onboarding_rd.cell(index + 2, column, value)
-
     for index, row in enumerate(hc_data):
         column = 0
         for i, value in enumerate(row):
