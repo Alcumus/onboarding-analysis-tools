@@ -6,7 +6,7 @@ import openpyxl
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment
-from fuzzywuzzy import fuzz
+from rapidfuzz import fuzz
 from datetime import datetime, timedelta
 from convertTimeZone import convertFromIANATimezone
 
