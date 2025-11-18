@@ -1,11 +1,15 @@
 import argparse
 import csv
 import re
+import string
 import openpyxl
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment
-from fuzzywuzzy import fuzz
+try:
+    from rapidfuzz import fuzz
+except ImportError:
+    from fuzzywuzzy import fuzz
 from datetime import datetime, timedelta
 from convertTimeZone import convertFromIANATimezone
 
@@ -112,6 +116,16 @@ BASE_GENERIC_COMPANY_NAME_WORDS = ['construction', 'contracting', 'industriel', 
                                    'solutions', 'llc', 'enterprises', 'systems', 'industries',
                                    'technologies', 'company', 'corporation', 'installations', 'enr']
 
+# Compiled regex pattern for remove_generics() optimization
+GENERIC_WORDS_PATTERN = None  # Will be compiled after args are parsed
+
+
+def norm_name(name):
+    """Normalize hiring client name by removing punctuation and converting to lowercase."""
+    if not name:
+        return ''
+    return str(name).translate(str.maketrans('', '', string.punctuation)).strip().lower()
+
 
 def chunks(lst, n):
     """Yield successive n-sized chunks from lst."""
@@ -195,6 +209,12 @@ GENERIC_DOMAIN = BASE_GENERIC_DOMAIN + args.additional_generic_domain.split(args
 GENERIC_COMPANY_NAME_WORDS = BASE_GENERIC_COMPANY_NAME_WORDS + \
                              args.additional_generic_name_word.split(args.list_separator)
 
+# Compile regex pattern for optimal performance in remove_generics()
+GENERIC_WORDS_PATTERN = re.compile(
+    r'\b(?:' + '|'.join(re.escape(word) for word in GENERIC_COMPANY_NAME_WORDS) + r')\b',
+    re.IGNORECASE
+)
+
 
 def smart_boolean(bool_data):
     if isinstance(bool_data, str):
@@ -205,15 +225,10 @@ def smart_boolean(bool_data):
 
 
 # noinspection PyShadowingNames
-def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, contact_match=None):
-    cbx_company = cbx_row[CBX_COMPANY_FR] if cbx_row[CBX_COMPANY_FR] else cbx_row[CBX_COMPANY_EN]
-    print('   --> ', cbx_company, hc_email, cbx_row[CBX_ID], ratio_company, ratio_address, contact_match)
-    import string
-    def norm_name(name):
-        if not name:
-            return ''
-        # Remove punctuation, lowercase, and strip whitespace
-        return str(name).translate(str.maketrans('', '', string.punctuation)).strip().lower()
+def add_analysis_data(hc_row, cbx_row, hc_email, ratio_company=None, ratio_address=None, contact_match=None):
+    cbx_company = cbx_row[CBX_COMPANY_FR] or cbx_row[CBX_COMPANY_EN]
+    # Removed print for production - use logging if needed
+    # print('   --> ', cbx_company, hc_email, cbx_row[CBX_ID], ratio_company, ratio_address, contact_match)
 
     hiring_clients_list = [norm_name(x) for x in cbx_row[CBX_HIRING_CLIENT_NAMES].split(args.list_separator)]
     hiring_clients_qstatus = cbx_row[CBX_HIRING_CLIENT_QSTATUS].split(args.list_separator)
@@ -222,10 +237,15 @@ def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, c
     is_in_relationship = hc_name_norm in hiring_clients_list and hc_name_norm != ''
     is_qualified = False
     matched_qstatus = None
+    
+    # Cache currency check and optimize price conversions
+    is_cad = hc_row[HC_CONTACT_CURRENCY] == "CAD"
     sub_price_usd = float(cbx_row[CBX_SUB_PRICE_USD]) if cbx_row[CBX_SUB_PRICE_USD] else 0.0
     employee_price_usd = float(cbx_row[CBX_EMPL_PRICE_USD]) if cbx_row[CBX_EMPL_PRICE_USD] else 0.0
     sub_price_cad = float(cbx_row[CBX_SUB_PRICE_CAD]) if cbx_row[CBX_SUB_PRICE_CAD] else 0.0
     employee_price_cad = float(cbx_row[CBX_EMPL_PRICE_CAD]) if cbx_row[CBX_EMPL_PRICE_CAD] else 0.0
+    subscription_price = sub_price_cad if is_cad else sub_price_usd
+    employee_price = employee_price_cad if is_cad else employee_price_usd
     hiring_client_contractor_summary = f'{hc_row[HC_COMPANY]}, {hc_row[HC_STREET]}, {hc_row[HC_CITY]}, {hc_row[HC_STATE]}, {hc_row[HC_COUNTRY]}, {hc_row[HC_ZIP]}, {hc_row[HC_EMAIL]}, {hc_row[HC_FIRSTNAME]} {hc_row[HC_LASTNAME]}'
 
     if hc_row[HC_CONTACT_CURRENCY] != '' and hc_row[HC_CONTACT_CURRENCY] not in SUPPORTED_CURRENCIES:
@@ -251,8 +271,8 @@ def add_analysis_data(hc_row, cbx_row, ratio_company=None, ratio_address=None, c
         'suspended': cbx_row[CBX_SUSPENDED], 'email': cbx_row[CBX_EMAIL], 'first_name': cbx_row[CBX_FISTNAME],
         'last_name': cbx_row[CBX_LASTNAME], 'modules': cbx_row[CBX_MODULES],
         'account_type': cbx_row[CBX_ACCOUNT_TYPE],
-        'subscription_price': sub_price_cad if hc_row[HC_CONTACT_CURRENCY] == "CAD" else sub_price_usd,
-        'employee_price': employee_price_cad if hc_row[HC_CONTACT_CURRENCY] == "CAD" else employee_price_usd,
+        'subscription_price': subscription_price,
+        'employee_price': employee_price,
         'parents': cbx_row[CBX_PARENTS], 'previous': cbx_row[CBX_COMPANY_OLD],
         'hiring_client_names': cbx_row[CBX_HIRING_CLIENT_NAMES], 'hiring_client_count': hc_count,
         'is_in_relationship': is_in_relationship, 'is_qualified': is_qualified,
@@ -299,9 +319,9 @@ def action(hc_data, cbx_data, create, subscription_update, expiration_date, is_q
             elif reg_status == 'Non Member':
                 return 'activation_link'
             else:
-                print(f'WARNING: invalid registration status {hc_data[CBX_REGISTRATION_STATUS]}')
+                print(f'WARNING: invalid registration status {reg_status}')
                 if not ignore:
-                    exit(-1)
+                    raise ValueError(f'Invalid registration status: {reg_status}')
         else:
             if reg_status == 'Active':
                 if cbx_data['is_in_relationship']:
@@ -340,6 +360,10 @@ def action(hc_data, cbx_data, create, subscription_update, expiration_date, is_q
 
 
 def remove_generics(company_name):
+    """Remove generic company name words using pre-compiled regex pattern."""
+    if GENERIC_WORDS_PATTERN:
+        return GENERIC_WORDS_PATTERN.sub('', company_name)
+    # Fallback if pattern not compiled yet
     for word in GENERIC_COMPANY_NAME_WORDS:
         company_name = re.sub(r'\b' + word + r'\b', '', company_name)
     return company_name
@@ -363,11 +387,13 @@ def clean_company_name(name):
 
 
 def parse_assessment_level(level):
-    if(level is None or (isinstance(level, int) and level > 0 and level < 4)):
+    """Parse assessment level from various input formats."""
+    if level is None or (isinstance(level, int) and 0 < level < 4):
         return level
     
-    if(level.lower() in assessment_levels):
-        return assessment_levels[level.lower()]
+    if isinstance(level, str):
+        level_key = level.lower()
+        return assessment_levels.get(level_key, 0)
     
     return 0
 
@@ -409,6 +435,14 @@ if __name__ == '__main__':
     #     if 'Contractor' not in access_modes and access_modes:
     #         cbx_data.pop(index)
     print(f'Completed reading {len(cbx_data)} contractors.')
+    
+    # Pre-normalize CBX data once to avoid millions of repeated computations
+    print('Pre-normalizing CBX data for faster matching...')
+    for cbx_row in cbx_data:
+        cbx_row.append(clean_company_name(cbx_row[CBX_COMPANY_EN]))  # Index 28
+        cbx_row.append(clean_company_name(cbx_row[CBX_COMPANY_FR]))  # Index 29
+        cbx_row.append(cbx_row[CBX_ADDRESS].lower().replace('.', '').strip())  # Index 30
+    print(f'Pre-normalization complete.')
 
     print('Reading hiring client data file...')
     hc_wb = openpyxl.load_workbook(hc_file, read_only=True, data_only=True)
@@ -600,7 +634,7 @@ if __name__ == '__main__':
             if hc_force_cbx:
                 cbx_row = next(filter(lambda x: x[CBX_ID].strip() == hc_force_cbx, cbx_data), None)
                 if cbx_row:
-                    matches.append(add_analysis_data(hc_row, cbx_row))
+                    matches.append(add_analysis_data(hc_row, cbx_row, hc_email))
             else:
                 for cbx_row in cbx_data:
                     cbx_email = cbx_row[CBX_EMAIL].lower()
@@ -614,11 +648,11 @@ if __name__ == '__main__':
                     else:
                         contact_match = False
                     cbx_zip = cbx_row[CBX_ZIP].replace(' ', '').upper()
-                    cbx_company_en = clean_company_name(cbx_row[CBX_COMPANY_EN])
-                    cbx_company_fr = clean_company_name(cbx_row[CBX_COMPANY_FR])
+                    cbx_company_en = cbx_row[28]  # Pre-cached normalized EN name
+                    cbx_company_fr = cbx_row[29]  # Pre-cached normalized FR name
                     cbx_parents = cbx_row[CBX_PARENTS]
                     cbx_previous = cbx_row[CBX_COMPANY_OLD]
-                    cbx_address = cbx_row[CBX_ADDRESS].lower().replace('.', '').strip()
+                    cbx_address = cbx_row[30]  # Pre-cached normalized address
                     ratio_company_fr = fuzz.token_sort_ratio(cbx_company_fr, clean_hc_company)
                     ratio_company_en = fuzz.token_sort_ratio(cbx_company_en, clean_hc_company)
                     if cbx_row[CBX_COUNTRY] != hc_row[HC_COUNTRY]:
@@ -640,11 +674,11 @@ if __name__ == '__main__':
                     if (contact_match or (ratio_company >= float(args.ratio_company)
                                           and ratio_address >= float(args.ratio_address))):
                         matches.append(
-                            add_analysis_data(hc_row, cbx_row, ratio_company, ratio_address, contact_match))
+                            add_analysis_data(hc_row, cbx_row, hc_email, ratio_company, ratio_address, contact_match))
                     elif ratio_company >= 95.0 or (ratio_company >= float(args.ratio_company)
                                                    and ratio_address >= float(args.ratio_address)):
                         matches.append(
-                            add_analysis_data(hc_row, cbx_row, ratio_company, ratio_address, contact_match))
+                            add_analysis_data(hc_row, cbx_row, hc_email, ratio_company, ratio_address, contact_match))
         ids = []
         best_match = 0
         # Exclude 'DO NOT USE' entries
@@ -735,7 +769,7 @@ if __name__ == '__main__':
         hc_row.extend(metadata_array)
         for i, value in enumerate(hc_row):
             out_ws.cell(index+2, i+1, value)
-        if index % 10:
+        if (index + 1) % 100 == 0:
             out_wb.save(filename=output_file)
         print(f'{index+1} of {total} [{len(uniques_cbx_id)} found]')
 
